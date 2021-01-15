@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "rootDir": "./",
+    "baseUrl": "./",
+    "outDir": "./dist/",
+    "noImplicitAny": false,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "target": "es2020",
+    "sourceMap": true,
+    "lib": [
+      "dom",
+      "es5",
+      "es6",
+      "esnext",
+      "scripthost",
+    ],
+    "jsx": "react",
+    "allowSyntheticDefaultImports": true,
+    "typeRoots": [
+      "./node_modules/@types",
+      "./typings/custom.d.ts",
+    ],
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "downlevelIteration": true
+  },
+  "include": ["src", "scripts"],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
