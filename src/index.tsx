@@ -8,15 +8,18 @@ import pointsInTriangle from 'points-in-triangle';
 import Alea from 'alea';
 import SimplexNoise from 'simplex-noise';
 import './style.css';
-import { octaveNoise } from './utils';
+import { octaveNoise, floodFill, getNeighbors, anyNeighbor, forEachNeighbor } from './utils';
+import { CoordArray } from './types';
 
 enum TerrainType {
   OCEAN,
   LAND,
+  COAST,
 }
 const terrainTypeColor = {
   [TerrainType.OCEAN]: [37, 140, 219],
   [TerrainType.LAND]: [29, 179, 39],
+  [TerrainType.COAST]: [59, 166, 247],
 }
 
 const HEX_SIZE = 10;
@@ -49,8 +52,8 @@ const graphics = new PIXI.Graphics()
 const Hex = Honeycomb.extendHex({ size: HEX_SIZE })
 const Grid = Honeycomb.defineGrid(Hex)
 
-const gridWidth = 100;
-const gridHeight = 100;
+const gridWidth = 99;
+const gridHeight = 99;
 const grid = Grid.rectangle({ width: gridWidth, height: gridHeight })
 
 viewport.worldWidth = grid.pointWidth();
@@ -59,18 +62,32 @@ viewport.worldHeight = grid.pointHeight();
 // rasterize
 const worldWidth = Math.ceil(grid.pointWidth());
 const worldHeight = Math.ceil(grid.pointHeight());
-const hexHeightmap = ndarray(new Uint8Array(gridWidth * gridHeight), [gridWidth, gridHeight]);
-const worldHeightmap = ndarray(new Uint8Array(worldWidth * worldHeight), [worldWidth, worldHeight]);
+const hexHeightmap = ndarray(new Int32Array(gridWidth * gridHeight), [gridWidth, gridHeight]);
+const pixelTypes = ndarray(new Int32Array(worldWidth * worldHeight), [worldWidth, worldHeight]);
+for (let i = 0; i < pixelTypes.data.length; i++) {
+  pixelTypes.data[i] = -1;
+}
+
 console.log('world size', worldWidth, worldHeight);
 
+function getPixelType(value) {
+  if (value < SEALEVEL) {
+    return TerrainType.OCEAN;
+  } else if (value > 0) {
+    return TerrainType.LAND;
+  }
+  return null;
+}
+
 grid.forEach(hex => {
-  const hexHeightValue = octaveNoise(
+  const hexHeightValue = (octaveNoise(
     simplexNoise.noise2D.bind(simplexNoise),
-    hex.x, hex.y,
-    2,
-    0.30,
-    0.02,
-  ) * 250;
+    hex.x * 2,
+    hex.y * 2,
+    3,
+    5.30,
+    0.012,
+  ) * 250) + 1;
   hexHeightmap.set(hex.x, hex.y, hexHeightValue);
   const point = hex.toPoint();
   const center = {
@@ -87,20 +104,63 @@ grid.forEach(hex => {
       [(center.x), (center.y)],
     ];
     pointsInTriangle(triangle, (x, y) => {
-      worldHeightmap.set(Math.ceil(x), Math.ceil(y), hexHeightValue);
+      pixelTypes.set(Math.round(x), Math.round(y), getPixelType(hexHeightValue));
     })
   }
 });
 
-function getHexColor(x, y) {
-  const value = worldHeightmap.get(x, y);
-  let color = [value, value, value];
-  if (value < SEALEVEL) {
-    color = terrainTypeColor[TerrainType.OCEAN];
-  } else {
-    color = terrainTypeColor[TerrainType.LAND]
+// console.time('calculate neighbors');
+// const neighbors_4 = ndarray([], [worldWidth, worldHeight]);
+// const neighbors_8 = ndarray([], [worldWidth, worldHeight]);
+// for (let y = 0; y < worldHeight; y++) {
+//   for (let x = 0; x < worldWidth; x++) {
+//     neighbors_4.set(x, y, getNeighbors(x, y));
+//     neighbors_8.set(x, y, getNeighbors(x, y, true));
+//   }
+// }
+// console.timeEnd('calculate neighbors');
+
+let coastlineSeeds: CoordArray = [];
+console.time('coastline');
+for (let y = 0; y < worldHeight; y++) {
+  for (let x = 0; x < worldWidth; x++) {
+    if (pixelTypes.get(x, y) === TerrainType.OCEAN) {
+      const isOnCoast = anyNeighbor(
+        pixelTypes,
+        x, y,
+        (value) => value === TerrainType.LAND,
+      );
+      if (isOnCoast && rng() < 1) {
+        pixelTypes.set(x, y, TerrainType.COAST);
+        coastlineSeeds.push([x, y]);
+      }
+    }
   }
-  return color;
+}
+for (let i = 0; i < 3; i++) {
+  let added: CoordArray = [];
+  for (let [x, y] of coastlineSeeds) {
+    forEachNeighbor(
+      pixelTypes,
+      x, y,
+      (value, nx, ny) => {
+        if (rng() < 0.5 && value === TerrainType.OCEAN) {
+          pixelTypes.set(nx, ny, TerrainType.COAST);
+          added.push([nx, ny]);
+        }
+      }
+    );
+  }
+  coastlineSeeds = added;
+}
+console.timeEnd('coastline');
+
+function getHexColor(x, y) {
+  const pixelType = pixelTypes.get(x, y);
+  if (pixelType !== -1) {
+    return terrainTypeColor[pixelType];
+  }
+  return [1, 1, 1];
 }
 
 // draw map
@@ -120,8 +180,7 @@ for (let y = 0; y < worldHeight; y++) {
   }
 }
 
-console.log('heightmap', worldHeightmap);
-console.log('imageArray', imageArray);
+console.log('heightmap', pixelTypes);
 
 const texture = PIXI.Texture.fromBuffer(imageArray, worldWidth, worldHeight);
 
@@ -131,9 +190,9 @@ viewport.addChild(terrainMap);
 
 function colorToNumber(color) {
   return (color[0] << 16) + (color[1] << 8) + (color[2]);
- }
+}
 
-graphics.lineStyle(0.25, 0x000)
+graphics.lineStyle(1, 0x333333)
 grid.forEach(hex => {
   const point = hex.toPoint()
   const corners = hex.corners().map(corner => corner.add(point))
