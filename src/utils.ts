@@ -101,3 +101,7 @@ export function floodFill(
   }
   return fillStack;
 }
+
+export function colorToNumber(color) {
+  return (color[0] << 16) + (color[1] << 8) + (color[2]);
+}
