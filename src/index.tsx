@@ -27,16 +27,17 @@ viewport.drag().pinch().wheel().decelerate();
 const world = new World({
   gridSize: {
     width: 100,
-    height: 100,
+    height: 50,
   },
   sealevel: 100,
   seed: 123,
 });
 
 // render
-const renderer = new WorldRenderer(world);
+const renderer = new WorldRenderer(app, world);
 viewport.worldWidth = renderer.worldWidth;
 viewport.worldHeight = renderer.worldHeight;
+viewport.addChild(renderer.chunksLayer);
 viewport.addChild(renderer.debugGraphics);
 
 console.log({ app, viewport, world, renderer });
