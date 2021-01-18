@@ -143,7 +143,6 @@ export class WorldRenderer {
 
 
     // debug
-    this.debugGraphics.lineStyle(1, 0xFFFFFF)
     this.world.hexgrid.forEach(hex => {
       const point = hex.toPoint()
       const corners = hex.round().corners().map(corner => corner.add(point));
@@ -154,6 +153,7 @@ export class WorldRenderer {
       const [firstCorner, ...otherCorners] = corners
 
       // draw grid lines
+      this.debugGraphics.lineStyle(1, 0xFFFFFF);
       this.debugGraphics.moveTo(firstCorner.x, firstCorner.y)
       otherCorners.forEach(({ x, y }) => this.debugGraphics.lineTo(x, y))
       this.debugGraphics.lineTo(firstCorner.x, firstCorner.y)
@@ -164,6 +164,14 @@ export class WorldRenderer {
         this.debugGraphics.beginFill(color);
         this.debugGraphics.drawCircle(center.x, center.y, 5);
         this.debugGraphics.endFill();
+      }
+
+      if (this.world.hexRiverEdges.containsKey(hex)) {
+        this.debugGraphics.lineStyle(5, 0x0000FF);
+        for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
+          this.debugGraphics.moveTo(p1.x, p1.y);
+          this.debugGraphics.lineTo(p2.x, p2.y);
+        }
       }
     });
   }
