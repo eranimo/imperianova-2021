@@ -2,7 +2,7 @@ import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { Direction, directionIndexOrder } from './types';
 import { bresenhamLinePlot, floodFill } from './utils';
-import { EdgeFeature, HexFeature, TerrainType } from './World';
+import { EdgeFeature, HexFeature, TerrainType, terrainTransitions } from './World';
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -24,6 +24,7 @@ enum CellType {
   WATER = 7,
   GRASS = 8,
   BEACH = 9,
+  FOREST = 10,
 };
 
 
@@ -47,11 +48,13 @@ const cellTypeColor = {
   [CellType.WATER]: [37, 140, 219],
   [CellType.GRASS]: [29, 179, 39],
   [CellType.BEACH]: [240, 217, 48],
+  [CellType.FOREST]: [57, 117, 47],
 }
 
 const terrainCenterCellTypes = {
   [TerrainType.OCEAN]: CellType.WATER,
-  [TerrainType.LAND]: CellType.GRASS,
+  [TerrainType.GRASSLAND]: CellType.GRASS,
+  [TerrainType.FOREST]: CellType.FOREST,
 }
 
 const TILE_WIDTH = 64;
@@ -96,28 +99,184 @@ function getHexTileID(hexTile: HexTile) {
   );
 }
 
+class TileGrid {
+  public grid: ndarray;
+
+  constructor(
+    public hexTile: HexTile,
+    public width: number,
+    public height: number,
+  ) {
+    this.grid = ndarray(new Uint8Array(width * height), [width, height]);
+  }
+
+  /**
+   * Changes cells from one CellType to another, if the cell is of a target cell type
+   * and if the number of neighbors of a given type is met.
+   * @param targetCellType CellType to change
+   * @param neighborCellType CellType to check neighbors for
+   * @param validNeighborCount Number of neighbors of neighborCellType required for this cell to transform
+   * @param toCellType CellType to transform to
+   * @param chance Percent chance (float) of changing
+   */
+  changeRule(
+    targetCellType: CellType,
+    neighborCellType: CellType,
+    validNeighborCount: number,
+    toCellType: CellType,
+    chance: number = 1,
+  ) {
+    let validCells = [];
+    this.forEachCell((x, y) => {
+      if (this.get(x, y) === targetCellType) {
+        const neighborCount = this.countNeighborsOfType(x, y, neighborCellType);
+        if (neighborCount >= validNeighborCount && Math.random() < chance) {
+          validCells.push([x, y]);
+        }
+      }
+    });
+
+    for (const [x, y] of validCells) {
+      this.set(x, y, toCellType);
+    }
+  }
+
+  /**
+   * Transforms cells from one CellType to another, with a higher chance the more neighbors
+   * of toCellType a cell of fromCellType has
+   * @param fromCellType CellType of cells to "grow" into
+   * @param toCellType CellType to transform to
+   */
+  grow(
+    fromCellType: CellType,
+    toCellType: CellType,
+  ) {
+    let validCells = [];
+    this.forEachCell((x, y) => {
+      if (this.get(x, y) === fromCellType) {
+        const neighborCount = this.countNeighborsOfType(x, y, toCellType);
+        if (Math.random() < (neighborCount / 4)) {
+          validCells.push([x, y]);
+        }
+      }
+    });
+
+    for (const [x, y] of validCells) {
+      this.set(x, y, toCellType);
+    }
+  }
+
+  countNeighborsOfType(
+    x: number,
+    y: number,
+    cellType: CellType,
+  ) {
+    let count = 0;
+    if (this.get(x - 1, y) === cellType) count++;
+    if (this.get(x + 1, y) === cellType) count++;
+    if (this.get(x, y - 1) === cellType) count++;
+    if (this.get(x, y + 1) === cellType) count++;
+    return count;
+  }
+
+  forEachCell(
+    func: (x: number, y: number) => void
+  ) {
+    for (let x = 0; x < this.width; x++) {
+      for (let y = 0; y < this.height; y++) {
+        func(x, y);
+      }
+    }
+  }
+
+  floodFill(
+    x: number,
+    y: number,
+    value: CellType,
+    isValidCell: (value: CellType) => boolean,
+  ) {
+    floodFill(
+      this.grid,
+      x,
+      y,
+      value,
+      (matrix, x, y) => isValidCell(matrix.get(x, y)),
+    );
+  }
+
+  get(x: number, y: number): CellType {
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) {
+      return null;
+    }
+    return this.grid.get(x, y);
+  }
+
+  set(x: number, y: number, value: CellType) {
+    return this.grid.set(x, y, value);
+  }
+}
+
 function drawHexTile(hexTile: HexTile): PIXI.Texture {
   const width = TILE_WIDTH;
   const height = TILE_HEIGHT;
-  const grid = ndarray(new Uint8Array(width * height), [width, height]);
+  const grid = new TileGrid(hexTile, width, height);
 
+  let coastlineCellTypes: Set<CellType> = new Set();
   corners.forEach((corner, i) => {
     const points = bresenhamLinePlot(
       Math.round(corner[0][0]), Math.round(corner[0][1]),
       Math.round(corner[1][0]), Math.round(corner[1][1]),
     );
     for (let [x, y] of points) {
-      grid.set(x, y, directionToCellType[directionIndexOrder[i]]);
+      // const cellType = directionToCellType[directionIndexOrder[i]];
+      const edgeTerrainType = hexTile.terrainTransitions[i];
+      let cellType = terrainCenterCellTypes[hexTile.terrainType];
+      if (terrainTransitions[hexTile.terrainType] && terrainTransitions[hexTile.terrainType].includes(edgeTerrainType)) {
+        cellType = terrainCenterCellTypes[edgeTerrainType];
+        coastlineCellTypes.add(cellType);
+      }
+      grid.set(x, y, cellType);
     }
   });
 
-  floodFill(
-    grid,
+  const centerCellType = terrainCenterCellTypes[hexTile.terrainType];
+
+  // flood fill center of tile
+  grid.floodFill(
     Math.round(width / 2),
     Math.round(height / 2),
-    terrainCenterCellTypes[hexTile.terrainType],
-    (matrix, x, y) => matrix.get(x, y) === 0,
+    centerCellType,
+    value => value === 0,
   );
+
+  // expand coastlines
+  for (let count = 0; count < 15; count++) {
+    for (const cellType of coastlineCellTypes) {
+      grid.grow(
+        centerCellType,
+        cellType,
+      );
+    }
+  }
+
+  // clean up coastline
+  for (const cellType of coastlineCellTypes) {
+    // remove island cells
+    grid.changeRule(
+      centerCellType,
+      cellType,
+      3,
+      cellType,
+    );
+    // remove single-cell peninsulas
+    grid.changeRule(
+      cellType,
+      centerCellType,
+      3,
+      centerCellType,
+    );
+  }
+
 
   // convert to image
   const buffer = new Float32Array(width * height * 4);
@@ -142,7 +301,6 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
       i++;
     }
   }
-  console.log(buffer);
 
   return PIXI.Texture.fromBuffer(buffer, width, height);
 }
@@ -173,7 +331,7 @@ export class WorldTileset {
     this.renderTexture = new PIXI.RenderTexture(rt);
   }
 
-  static COLUMNS = 100;
+  static COLUMNS = 200;
   static PADDING = 10;
 
   get pixelWidth() {
@@ -196,6 +354,7 @@ export class WorldTileset {
   private generateTile(hexTile: HexTile): number {
     console.log('generating', hexTile);
     const id = getHexTileID(hexTile);
+    console.time(`generating hex ID ${id}`);
     const texture = drawHexTile(hexTile);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
@@ -205,6 +364,7 @@ export class WorldTileset {
     );
     this.container.addChild(sprite);
     this.hexTileSprite.set(id, sprite);
+    console.timeEnd(`generating hex ID ${id}`);
     return id;
   }
 
@@ -241,12 +401,13 @@ export class WorldTileset {
   }
 
   get totalTileCount() {
-    return (
-      (TerrainType.__LENGTH - 1) *
-      ((TerrainType.__LENGTH - 1) ** (Direction.__LENGTH)) *
-      ((EdgeFeature.__LENGTH) ** (Direction.__LENGTH)) *
-      (HexFeature.__LENGTH)
-    ) + 1000; // TODO: find out why this nunber is wrong
+    return 20000;
+    // return (
+    //   (TerrainType.__LENGTH - 1) *
+    //   ((TerrainType.__LENGTH - 1) ** (Direction.__LENGTH)) *
+    //   ((EdgeFeature.__LENGTH) ** (Direction.__LENGTH)) *
+    //   (HexFeature.__LENGTH)
+    // ) + 1000; // TODO: find out why this nunber is wrong
   }
   
   public updateTileset() {

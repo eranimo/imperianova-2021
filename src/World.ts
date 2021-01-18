@@ -11,9 +11,15 @@ import { clamp } from 'lodash';
 export enum TerrainType {
   NONE = 0,
   OCEAN = 1,
-  LAND = 2,
+  GRASSLAND = 2,
+  FOREST = 3,
   __LENGTH,
 }
+
+export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
+  [TerrainType.OCEAN]: [TerrainType.GRASSLAND, TerrainType.FOREST],
+  [TerrainType.GRASSLAND]: [TerrainType.FOREST],
+};
 
 export enum EdgeFeature {
   NONE = 0,
@@ -72,10 +78,10 @@ export class World {
       this.indexMap.set(`${hex.x},${hex.y}`, index);
       const value = octaveNoise(
         simplexNoise.noise2D.bind(simplexNoise),
-        hex.x / 5,
-        hex.y / 5,
-        6,
-        0.5,
+        hex.x / 4,
+        hex.y / 4,
+        4,
+        0.8,
         0.08,
       ) + 1 / 2;
       this.hexHeightmap.set(hex.x, hex.y, value * 255);
@@ -87,7 +93,15 @@ export class World {
       if (height < sealevel) {
         this.hexTerrainType.set(hex.x, hex.y, TerrainType.OCEAN);
       } else {
-        this.hexTerrainType.set(hex.x, hex.y, TerrainType.LAND);
+        const value = octaveNoise(
+          simplexNoise.noise2D.bind(simplexNoise),
+          hex.x / 5,
+          hex.y / 5,
+          2,
+          0.2,
+          0.08,
+        ) + 1 / 2;
+        this.hexTerrainType.set(hex.x, hex.y, value < 0.5 ? TerrainType.FOREST : TerrainType.GRASSLAND);
       }
     })
     console.log('world', this);

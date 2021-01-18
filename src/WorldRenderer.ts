@@ -7,7 +7,8 @@ import { WorldTileset } from './WorldTileset';
 
 const terrainTypeColor = {
   [TerrainType.OCEAN]: [37, 140, 219],
-  [TerrainType.LAND]: [29, 179, 39],
+  [TerrainType.GRASSLAND]: [29, 179, 39],
+  [TerrainType.FOREST]: [57, 117, 47],
 }
 
 
