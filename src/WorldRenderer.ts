@@ -61,7 +61,7 @@ const terrainCenterCellTypes = {
 }
 
 const TILE_WIDTH = 64;
-const TILE_HEIGHT = 64;
+const TILE_HEIGHT = 60;
 const TILE_Y_OFFSET = 10;
 // 64 x 64
 const HALF_W = (TILE_WIDTH / 2);
@@ -336,10 +336,6 @@ export class WorldRenderer {
     let minY = Infinity;
     for (const hex of hexes) {
       const [ x, y ] = this.world.getHexPosition(hex.x, hex.y);
-      // const x = hex.x * (TILE_WIDTH * 3/4 + 1);
-      // const y = hex.x % 2 === 0
-      //   ? TILE_HEIGHT * hex.y
-      //   : TILE_HEIGHT * hex.y + (TILE_HEIGHT / 2);
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       hexPosititions.push([x, y]);

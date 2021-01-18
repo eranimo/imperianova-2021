@@ -34,7 +34,7 @@ export type WorldOptions = {
 }
 
 const Hex = Honeycomb.extendHex({
-  size: { xRadius: 32.665, yRadius: 36.95 },
+  size: { xRadius: 32.663, yRadius: 34.641 },
   orientation: 'flat'
 });
 const Grid = Honeycomb.defineGrid(Hex);
