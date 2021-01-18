@@ -2,15 +2,8 @@ import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
 import { Direction } from './types';
 import { colorToNumber } from './utils';
-import { EdgeFeature, HexFeature, TerrainType, World } from './World';
+import { EdgeFeature, HexFeature, TerrainType, World, terrainColors } from './World';
 import { WorldTileset } from './WorldTileset';
-
-const terrainTypeColor = {
-  [TerrainType.OCEAN]: [37, 140, 219],
-  [TerrainType.GRASSLAND]: [29, 179, 39],
-  [TerrainType.FOREST]: [57, 117, 47],
-}
-
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -30,8 +23,8 @@ export class WorldRenderer {
   constructor(private app: PIXI.Application, world: World) {
     this.world = world;
     this.debugGraphics = new PIXI.Graphics();
-    this.worldWidth = this.world.grid.pointWidth();
-    this.worldHeight = this.world.grid.pointHeight();
+    this.worldWidth = this.world.hexgrid.pointWidth();
+    this.worldHeight = this.world.hexgrid.pointHeight();
     this.chunksLayer = new PIXI.Container();
     this.worldTileset = new WorldTileset(this.app.renderer);
     console.log(this.worldTileset);
@@ -97,7 +90,7 @@ export class WorldRenderer {
 
     hexes.forEach((hex, index) => {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
-      if (terrainType === TerrainType.NONE) return;
+      if (terrainType === TerrainType.MAP_EDGE) return;
       const hexTileID = this.worldTileset.getTile({
         terrainType,
         terrainTransitions: this.world.getHexNeighborTerrain(hex.x, hex.y),
@@ -145,10 +138,13 @@ export class WorldRenderer {
     console.timeEnd('draw chunks');
     console.groupEnd();
 
+    // const sprite = new PIXI.Sprite(this.worldTileset.renderTexture);
+    // this.debugGraphics.addChild(sprite);
+
 
     // debug
     this.debugGraphics.lineStyle(1, 0xFFFFFF)
-    this.world.grid.forEach(hex => {
+    this.world.hexgrid.forEach(hex => {
       const point = hex.toPoint()
       const corners = hex.round().corners().map(corner => corner.add(point));
       const center = {
@@ -163,9 +159,9 @@ export class WorldRenderer {
       this.debugGraphics.lineTo(firstCorner.x, firstCorner.y)
 
       // draw terrain type indicator
-      const color = terrainTypeColor[this.world.hexTerrainType.get(hex.x, hex.y)];
+      const color = terrainColors[this.world.terrain.get(hex.x, hex.y)];
       if (color) {
-        this.debugGraphics.beginFill(colorToNumber(color));
+        this.debugGraphics.beginFill(color);
         this.debugGraphics.drawCircle(center.x, center.y, 5);
         this.debugGraphics.endFill();
       }

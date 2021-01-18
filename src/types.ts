@@ -17,6 +17,8 @@ export enum Direction {
   __LENGTH
 }
 
+export type DirectionMap<T> = Record<Exclude<Direction, Direction.__LENGTH>, T>;
+
 export const directionShort = {
   [Direction.SE]: 'SE',
   [Direction.NE]: 'NE',
@@ -24,6 +26,15 @@ export const directionShort = {
   [Direction.NW]: 'NW',
   [Direction.SW]: 'SW',
   [Direction.S]: 'S',
+}
+
+export const directionTitles = {
+  [Direction.SE]: 'South East',
+  [Direction.NE]: 'North East',
+  [Direction.N]: 'North',
+  [Direction.NW]: 'North West',
+  [Direction.SW]: 'South West',
+  [Direction.S]: 'South',
 }
 
 export const adjacentDirections = {

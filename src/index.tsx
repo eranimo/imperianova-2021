@@ -3,6 +3,7 @@ import * as PIXI from 'pixi.js';
 import { World } from './World';
 import { WorldRenderer } from './WorldRenderer';
 import './style.css';
+import { WorldGenerator } from './WorldGenerator';
 
 
 // setup
@@ -24,14 +25,13 @@ app.stage.addChild(viewport);
 viewport.drag().pinch().wheel().decelerate();
 
 // generate
-const world = new World({
-  gridSize: {
-    width: 100,
-    height: 50,
-  },
+const world = new World();
+const worldGen = new WorldGenerator(world, {
+  size: 50,
   sealevel: 100,
   seed: 123,
 });
+worldGen.generate();
 
 // render
 const renderer = new WorldRenderer(app, world);
@@ -40,4 +40,4 @@ viewport.worldHeight = renderer.worldHeight;
 viewport.addChild(renderer.chunksLayer);
 viewport.addChild(renderer.debugGraphics);
 
-console.log({ app, viewport, world, renderer });
+console.log({ app, viewport, world, renderer, worldGen });

@@ -26,6 +26,9 @@ enum CellType {
   GRASS = 9,
   BEACH = 10,
   FOREST = 11,
+  ICE = 12,
+  SAND = 13,
+  TUNDRA = 14,
 };
 
 
@@ -51,12 +54,19 @@ const cellTypeColor = {
   [CellType.GRASS]: [29, 179, 39],
   [CellType.BEACH]: [240, 217, 48],
   [CellType.FOREST]: [57, 117, 47],
+  [CellType.ICE]: [250, 250, 250],
+  [CellType.SAND]: [217, 191, 140],
+  [CellType.TUNDRA]: [150, 209, 195],
 }
 
 const terrainCenterCellTypes = {
   [TerrainType.OCEAN]: CellType.WATER,
   [TerrainType.GRASSLAND]: CellType.GRASS,
   [TerrainType.FOREST]: CellType.FOREST,
+  [TerrainType.GLACIAL]: CellType.ICE,
+  [TerrainType.TAIGA]: CellType.FOREST,
+  [TerrainType.TUNDRA]: CellType.TUNDRA,
+  [TerrainType.DESERT]: CellType.SAND,
 }
 
 const TILE_WIDTH = 64;
@@ -372,12 +382,12 @@ export class WorldTileset {
    * @returns HexTile ID
    */
   private generateTile(hexTile: HexTile): number {
-    console.log('generating', hexTile);
+    // console.log('generating', hexTile);
     const id = getHexTileID(hexTile);
     const index = this.numTiles;
     this.numTiles++;
     this.tileIDToIndex.set(id, index);
-    console.time(`generating hex ID ${id}`);
+    // console.time(`generating hex ID ${id}`);
     const texture = drawHexTile(hexTile);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
@@ -387,7 +397,7 @@ export class WorldTileset {
     );
     this.container.addChild(sprite);
     this.hexTileSprite.set(id, sprite);
-    console.timeEnd(`generating hex ID ${id}`);
+    // console.timeEnd(`generating hex ID ${id}`);
     return id;
   }
 
