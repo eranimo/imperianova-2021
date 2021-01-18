@@ -20,11 +20,12 @@ enum CellType {
   DEBUG_NW = 4,
   DEBUG_SW = 5,
   DEBUG_S = 6,
+  DEBUG_CENTER = 7,
 
-  WATER = 7,
-  GRASS = 8,
-  BEACH = 9,
-  FOREST = 10,
+  WATER = 8,
+  GRASS = 9,
+  BEACH = 10,
+  FOREST = 11,
 };
 
 
@@ -44,7 +45,8 @@ const cellTypeColor = {
   [CellType.DEBUG_NW]: [0, 0, 255],
   [CellType.DEBUG_SW]: [255, 255, 0],
   [CellType.DEBUG_S]: [0, 255, 0],
-
+  [CellType.DEBUG_CENTER]: [0, 0, 0],
+  
   [CellType.WATER]: [37, 140, 219],
   [CellType.GRASS]: [29, 179, 39],
   [CellType.BEACH]: [240, 217, 48],
@@ -188,6 +190,14 @@ class TileGrid {
       }
     }
   }
+  
+  replaceAll(fromCellType: CellType, toCellType: CellType) {
+    this.forEachCell((x, y) => {
+      if (this.get(x, y) === fromCellType) {
+        this.set(x, y, toCellType)
+      }
+    });
+  }
 
   floodFill(
     x: number,
@@ -234,26 +244,28 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
       if (terrainTransitions[hexTile.terrainType] && terrainTransitions[hexTile.terrainType].includes(edgeTerrainType)) {
         cellType = terrainCenterCellTypes[edgeTerrainType];
         coastlineCellTypes.add(cellType);
+      } else if (terrainTransitions[hexTile.terrainType]) {
+        cellType = terrainCenterCellTypes[hexTile.terrainType];
+        coastlineCellTypes.add(cellType);
       }
       grid.set(x, y, cellType);
     }
   });
 
-  const centerCellType = terrainCenterCellTypes[hexTile.terrainType];
 
   // flood fill center of tile
   grid.floodFill(
     Math.round(width / 2),
     Math.round(height / 2),
-    centerCellType,
+    CellType.DEBUG_CENTER,
     value => value === 0,
   );
 
   // expand coastlines
-  for (let count = 0; count < 15; count++) {
+  for (let count = 0; count < 7; count++) {
     for (const cellType of coastlineCellTypes) {
       grid.grow(
-        centerCellType,
+        CellType.DEBUG_CENTER,
         cellType,
       );
     }
@@ -263,7 +275,7 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
   for (const cellType of coastlineCellTypes) {
     // remove island cells
     grid.changeRule(
-      centerCellType,
+      CellType.DEBUG_CENTER,
       cellType,
       3,
       cellType,
@@ -271,11 +283,14 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
     // remove single-cell peninsulas
     grid.changeRule(
       cellType,
-      centerCellType,
+      CellType.DEBUG_CENTER,
       3,
-      centerCellType,
+      CellType.DEBUG_CENTER,
     );
   }
+
+  const centerCellType = terrainCenterCellTypes[hexTile.terrainType];
+  grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
 
   // convert to image
