@@ -312,6 +312,8 @@ export class WorldTileset {
   private hexTileMap: Map<number, HexTile>;
   private hexTileSprite: Map<number, PIXI.Sprite>;
   private hexTileTexture: Map<number, PIXI.Texture>;
+  private tileIDToIndex: Map<number, number>;
+  public numTiles: number;
 
   constructor(
     private renderer: PIXI.Renderer,
@@ -329,10 +331,13 @@ export class WorldTileset {
       resolution: 1
     })
     this.renderTexture = new PIXI.RenderTexture(rt);
+    this.tileIDToIndex = new Map();
+    this.numTiles = 0;
   }
 
   static COLUMNS = 200;
   static PADDING = 10;
+  static MAX_TILES = 20_000;
 
   get pixelWidth() {
     return WorldTileset.COLUMNS * (TILE_WIDTH + WorldTileset.PADDING);
@@ -343,7 +348,7 @@ export class WorldTileset {
   }
 
   get rows() {
-    return Math.ceil(this.totalTileCount / WorldTileset.COLUMNS);
+    return Math.ceil(WorldTileset.MAX_TILES / WorldTileset.COLUMNS);
   }
 
   /**
@@ -354,13 +359,16 @@ export class WorldTileset {
   private generateTile(hexTile: HexTile): number {
     console.log('generating', hexTile);
     const id = getHexTileID(hexTile);
+    const index = this.numTiles;
+    this.numTiles++;
+    this.tileIDToIndex.set(id, index);
     console.time(`generating hex ID ${id}`);
     const texture = drawHexTile(hexTile);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
     sprite.position.set(
-      (id % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
-      (Math.floor(id / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
+      (index % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
+      (Math.floor(index / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
     );
     this.container.addChild(sprite);
     this.hexTileSprite.set(id, sprite);
@@ -390,9 +398,10 @@ export class WorldTileset {
     if (this.hexTileTexture.has(id)) {
       return this.hexTileTexture.get(id);
     }
+    const index = this.tileIDToIndex.get(id);
     const texture = new PIXI.Texture(this.renderTexture.baseTexture, new PIXI.Rectangle(
-      (id % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
-      (Math.floor(id / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
+      (index % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
+      (Math.floor(index / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
       TILE_WIDTH + WorldTileset.PADDING,
       TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING,
     ));
@@ -400,16 +409,6 @@ export class WorldTileset {
     return texture;
   }
 
-  get totalTileCount() {
-    return 20000;
-    // return (
-    //   (TerrainType.__LENGTH - 1) *
-    //   ((TerrainType.__LENGTH - 1) ** (Direction.__LENGTH)) *
-    //   ((EdgeFeature.__LENGTH) ** (Direction.__LENGTH)) *
-    //   (HexFeature.__LENGTH)
-    // ) + 1000; // TODO: find out why this nunber is wrong
-  }
-  
   public updateTileset() {
     this.renderer.render(this.container, this.renderTexture);
   }
