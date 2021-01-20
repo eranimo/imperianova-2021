@@ -44,6 +44,26 @@ export class TileGrid {
     }
   }
 
+  expand(
+    toCellType: CellType,
+    isValidCell: (value: CellType) => boolean,
+    chance: number = 1,
+  ) {
+    let validCells = [];
+    this.forEachCell((x, y) => {
+      if (isValidCell(this.get(x, y))) {
+        const neighborCount = this.countNeighborsOfType(x, y, toCellType);
+        if (neighborCount > 1 && Math.random() < chance) {
+          validCells.push([x, y]);
+        }
+      }
+    });
+
+    for (const [x, y] of validCells) {
+      this.set(x, y, toCellType);
+    }
+  }
+
   /**
    * Transforms cells from one CellType to another, with a higher chance the more neighbors
    * of toCellType a cell of fromCellType has
@@ -51,12 +71,12 @@ export class TileGrid {
    * @param toCellType CellType to transform to
    */
   grow(
-    fromCellType: CellType,
-    toCellType: CellType
+    toCellType: CellType,
+    isValidCell: (value: CellType) => boolean,
   ) {
     let validCells = [];
     this.forEachCell((x, y) => {
-      if (this.get(x, y) === fromCellType) {
+      if (isValidCell(this.get(x, y))) {
         const neighborCount = this.countNeighborsOfType(x, y, toCellType);
         if (Math.random() < (neighborCount / 4)) {
           validCells.push([x, y]);

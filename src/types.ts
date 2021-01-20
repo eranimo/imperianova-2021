@@ -83,3 +83,50 @@ export const oddq_directions = [
     [-1, 0], [-1, +1], [0, +1]
   ],
 ];
+
+export enum Corner {
+  RIGHT = 0,
+  BOTTOM_RIGHT = 1,
+  BOTTOM_LEFT = 2,
+  LEFT = 3,
+  TOP_LEFT = 4,
+  TOP_RIGHT = 5,
+  __LENGTH
+}
+
+export type CornerMap<T> = Record<Exclude<Corner, Corner.__LENGTH>, T>;
+
+export const cornerTitles: CornerMap<string> = {
+  [Corner.RIGHT]: 'Right',
+  [Corner.BOTTOM_RIGHT]: 'Bottom Right',
+  [Corner.BOTTOM_LEFT]: 'Bottom Left',
+  [Corner.LEFT]: 'Left',
+  [Corner.TOP_LEFT]: 'Top Left',
+  [Corner.TOP_RIGHT]: 'Top Right',
+}
+export const directionCorners = {
+  [Direction.SE]: [Corner.RIGHT, Corner.BOTTOM_RIGHT],
+  [Direction.NE]: [Corner.TOP_RIGHT, Corner.RIGHT],
+  [Direction.N]: [Corner.TOP_LEFT, Corner.TOP_RIGHT],
+  [Direction.NW]: [Corner.LEFT, Corner.TOP_LEFT],
+  [Direction.SW]: [Corner.BOTTOM_LEFT, Corner.LEFT],
+  [Direction.S]: [Corner.BOTTOM_RIGHT, Corner.BOTTOM_LEFT],
+}
+
+export const cornerDirections = {
+  [Corner.RIGHT]: [Direction.NE, Direction.SE],
+  [Corner.BOTTOM_RIGHT]: [Direction.SE, Direction.S],
+  [Corner.BOTTOM_LEFT]: [Direction.S, Direction.SW],
+  [Corner.LEFT]: [Direction.SW, Direction.NW],
+  [Corner.TOP_LEFT]: [Direction.NW, Direction.N],
+  [Corner.TOP_RIGHT]: [Direction.N, Direction.NE],
+}
+
+export const cornerIndexOrder = [
+  Corner.RIGHT,
+  Corner.BOTTOM_RIGHT,
+  Corner.BOTTOM_LEFT,
+  Corner.LEFT,
+  Corner.TOP_LEFT,
+  Corner.TOP_RIGHT,
+];

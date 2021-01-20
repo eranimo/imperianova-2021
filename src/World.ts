@@ -19,8 +19,12 @@ export enum TerrainType {
   TAIGA = 5,
   TUNDRA = 6,
   GLACIAL = 7,
+  RIVER = 8, // special
+  RIVER_MOUTH = 9, // special
   __LENGTH,
 }
+
+export type TerrainTypeMap<T> = Record<Exclude<TerrainType, TerrainType.__LENGTH>, T>;
 
 export const terrainColors: TerrainTypeMap<number> = {
   [TerrainType.MAP_EDGE]: 0x000000,
@@ -31,6 +35,8 @@ export const terrainColors: TerrainTypeMap<number> = {
   [TerrainType.TAIGA]: 0x006259,
   [TerrainType.TUNDRA]: 0x96D1C3,
   [TerrainType.GLACIAL]: 0xFAFAFA,
+  [TerrainType.RIVER]: 0x3F78CB,
+  [TerrainType.RIVER_MOUTH]: 0x3F78CB,
 };
 
 export const terrainMinimapColors: TerrainTypeMap<string> = {
@@ -42,6 +48,8 @@ export const terrainMinimapColors: TerrainTypeMap<string> = {
   [TerrainType.TAIGA]: '#006259',
   [TerrainType.TUNDRA]: '#96D1C3',
   [TerrainType.GLACIAL]: '#FAFAFA',
+  [TerrainType.RIVER]: '#3F78CB',
+  [TerrainType.RIVER_MOUTH]: '#3F78CB',
 };
 
 export const terrainTypeTitles: TerrainTypeMap<string> = {
@@ -53,9 +61,9 @@ export const terrainTypeTitles: TerrainTypeMap<string> = {
   [TerrainType.TAIGA]: 'Taiga',
   [TerrainType.TUNDRA]: 'Tundra',
   [TerrainType.GLACIAL]: 'Glacial',
+  [TerrainType.RIVER]: 'Ocean',
+  [TerrainType.RIVER_MOUTH]: 'Ocean',
 };
-
-export type TerrainTypeMap<T> = Record<Exclude<TerrainType, TerrainType.__LENGTH>, T>;
 
 export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
   [TerrainType.OCEAN]: [TerrainType.DESERT, TerrainType.GRASSLAND, TerrainType.FOREST, TerrainType.TAIGA, TerrainType.TUNDRA, TerrainType.GLACIAL],
@@ -66,6 +74,12 @@ export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
 };
 
 export enum EdgeFeature {
+  NONE = 0,
+  RIVER = 1,
+  __LENGTH
+}
+
+export enum CornerFeature {
   NONE = 0,
   RIVER = 1,
   __LENGTH
@@ -213,7 +227,7 @@ export class World {
     return coord;
   }
 
-  getTerrainForCoord(x: number, y: number) {
+  getTerrainForCoord(x: number, y: number): TerrainType {
     if (y === -1 || y === this.gridSize.height) {
       const half = Math.round(this.gridSize.width / 2);
       const nx = clamp(((half + (half - x)) - 1), 0, this.gridSize.width - 1);

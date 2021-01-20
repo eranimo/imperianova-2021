@@ -1,8 +1,8 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { Direction } from './types';
+import { Direction, DirectionMap, CornerMap, directionShort, adjacentDirections, directionCorners, directionIndexOrder, Corner, cornerIndexOrder, cornerDirections } from './types';
 import { colorToNumber } from './utils';
-import { EdgeFeature, HexFeature, TerrainType, World, terrainColors } from './World';
+import { EdgeFeature, HexFeature, TerrainType, World, terrainColors, CornerFeature, terrainTransitions } from './World';
 import { WorldTileset } from './WorldTileset';
 
 const CHUNK_WIDTH = 10;
@@ -91,17 +91,73 @@ export class WorldRenderer {
     hexes.forEach((hex, index) => {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
       if (terrainType === TerrainType.MAP_EDGE) return;
+      const hexObj = this.world.getHex(hex.x, hex.y);
+      const edgeFeatures: DirectionMap<EdgeFeature> = {
+        [Direction.SE]: EdgeFeature.NONE,
+        [Direction.NE]: EdgeFeature.NONE,
+        [Direction.N]: EdgeFeature.NONE,
+        [Direction.NW]: EdgeFeature.NONE,
+        [Direction.SW]: EdgeFeature.NONE,
+        [Direction.S]: EdgeFeature.NONE,
+      };
+      const cornerTerrainTypes: Partial<CornerMap<TerrainType>> = {};
+      if (this.world.hexRiverEdges.containsKey(hexObj)) {
+        const riverDirections = this.world.hexRiverEdges.getValue(hexObj);
+        for (let dir of riverDirections) {
+          edgeFeatures[dir] = EdgeFeature.RIVER;
+        }
+      }
+
+      // if any of this hex's neighbors have a river between them,
+      // set this corner feature to river
+      for (let corner of cornerIndexOrder) {
+        const directions = cornerDirections[corner];
+        const neighborOne = this.world.getHexNeighbor(hex.x, hex.y, directions[0]);
+        const neighborTwo = this.world.getHexNeighbor(hex.x, hex.y, directions[1]);
+        if (
+          // river on corners
+          this.world.riverHexPairs.has(hexObj) && 
+          this.world.riverHexPairs.get(hexObj).has(neighborTwo) ||
+          this.world.riverHexPairs.has(hexObj) && 
+          this.world.riverHexPairs.get(hexObj).has(neighborOne)
+        ) {
+          cornerTerrainTypes[corner] = TerrainType.RIVER;
+        } else if (
+          // river mouth
+          (terrainType === TerrainType.OCEAN && 
+            this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo))
+        ) {
+          cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
+        } else {
+          let cornerTerrainType: TerrainType = TerrainType.MAP_EDGE;
+          if (neighborOne && neighborTwo) {
+            const neighborOneTerrain = this.world.getTerrainForCoord(neighborOne.x, neighborOne.y);
+            const neighborTwoTerrain = this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y);
+            let transitionTerrainType: TerrainType;
+            if (terrainTransitions[neighborOneTerrain] && terrainTransitions[neighborOneTerrain].includes(neighborTwoTerrain)) {
+              transitionTerrainType = neighborTwoTerrain;
+            } else if (terrainTransitions[neighborTwoTerrain] && terrainTransitions[neighborTwoTerrain].includes(neighborOneTerrain)) {
+              transitionTerrainType = neighborOneTerrain;
+            } else if (neighborOneTerrain === neighborTwoTerrain) {
+              transitionTerrainType = neighborOneTerrain;
+            }
+            if (terrainTransitions[terrainType] && terrainTransitions[terrainType].includes(transitionTerrainType)) {
+              cornerTerrainType = transitionTerrainType;
+            } else {
+              cornerTerrainType = terrainType;
+            }
+          } else {
+            cornerTerrainType = terrainType;
+          }
+          cornerTerrainTypes[corner] = cornerTerrainType;
+        }
+      }
+
       const hexTileID = this.worldTileset.getTile({
         terrainType,
-        terrainTransitions: this.world.getHexNeighborTerrain(hex.x, hex.y),
-        edgeFeatures: {
-          [Direction.SE]: EdgeFeature.NONE,
-          [Direction.NE]: EdgeFeature.NONE,
-          [Direction.N]: EdgeFeature.NONE,
-          [Direction.NW]: EdgeFeature.NONE,
-          [Direction.SW]: EdgeFeature.NONE,
-          [Direction.S]: EdgeFeature.NONE,
-        },
+        edgeTerrainTypes: this.world.getHexNeighborTerrain(hex.x, hex.y),
+        cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
+        edgeFeatures,
         hexFeature: HexFeature.NONE,
       });
       const texture = this.worldTileset.getTextureForID(hexTileID);
