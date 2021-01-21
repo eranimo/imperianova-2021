@@ -116,16 +116,18 @@ export class WorldRenderer {
         const neighborTwo = this.world.getHexNeighbor(hex.x, hex.y, directions[1]);
         if (
           // river on corners
-          this.world.riverHexPairs.has(hexObj) && 
-          this.world.riverHexPairs.get(hexObj).has(neighborTwo) ||
-          this.world.riverHexPairs.has(hexObj) && 
-          this.world.riverHexPairs.get(hexObj).has(neighborOne)
+          // if this hex has rivers with either of the neighbors
+          (this.world.riverHexPairs.has(hexObj) && 
+          this.world.riverHexPairs.get(hexObj).has(neighborTwo))
+          ||
+          (this.world.riverHexPairs.has(hexObj) && 
+          this.world.riverHexPairs.get(hexObj).has(neighborOne))
         ) {
           cornerTerrainTypes[corner] = TerrainType.RIVER;
         } else if (
           // river mouth
-          (terrainType === TerrainType.OCEAN && 
-            this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo))
+          terrainType === TerrainType.OCEAN && 
+          this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)
         ) {
           cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
         } else {

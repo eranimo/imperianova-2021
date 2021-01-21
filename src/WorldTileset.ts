@@ -132,6 +132,7 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
   const grid = new TileGrid(hexTile, width, height);
 
   let edgeTypes: Set<CellType> = new Set();
+  let shouldDrawRiverMouth = false;
   let edgePoints: Partial<DirectionMap<CoordArray>> = {};
   directionCornerPoints.forEach((directionPoint, directionIndex) => {
     const points = bresenhamLinePlot(
@@ -163,7 +164,12 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
         const cornerTerrain = hexTile.cornerTerrainTypes[corner];
         grid.set(p1[0], p1[1], terrainPrimaryCellTypes[cornerTerrain]);
         grid.set(p2[0], p2[1], terrainPrimaryCellTypes[cornerTerrain]);
-        edgeTypes.add(terrainPrimaryCellTypes[cornerTerrain]);
+        const cornerType = terrainPrimaryCellTypes[cornerTerrain];
+        if (cornerType === CellType.RIVER_MOUTH) {
+          shouldDrawRiverMouth = true;
+        } else {
+          edgeTypes.add(cornerType);
+        }
       }
     }
   });
@@ -177,15 +183,24 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
     value => value === 0,
   );
 
+  if (shouldDrawRiverMouth) {
+    for (let count = 0; count < 12; count++) {
+      grid.grow(
+        CellType.RIVER_MOUTH,
+        value => value !== CellType.RIVER_MOUTH && value !== CellType.NONE,
+      );
+    }
+  }
+
   // expand coastlines
   for (let count = 0; count < 7; count++) {
     for (const cellType of edgeTypes) {
-      if (cellType === CellType.RIVER && count > 2) {
+      if (cellType === CellType.RIVER && count > 5) {
         continue;
       }
       grid.grow(
         cellType,
-        value => value === CellType.DEBUG_CENTER,
+        value => value !== cellType && value !== CellType.RIVER_MOUTH,
       );
     }
   }
@@ -197,25 +212,33 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
         grid.changeRule(
           CellType.DEBUG_CENTER,
           cellType,
-          2,
+          3,
           cellType,
+        );
+        grid.changeRule(
+          cellType,
+          CellType.DEBUG_CENTER,
+          3,
+          CellType.DEBUG_CENTER,
         );
       }
     } else {
-      // remove island cells
-      grid.changeRule(
-        CellType.DEBUG_CENTER,
-        cellType,
-        3,
-        cellType,
-      );
-      // remove single-cell peninsulas
-      grid.changeRule(
-        cellType,
-        CellType.DEBUG_CENTER,
-        3,
-        CellType.DEBUG_CENTER,
-      );
+      for (let count = 0; count < 3; count++) {
+        // remove island cells
+        grid.changeRule(
+          CellType.DEBUG_CENTER,
+          cellType,
+          3,
+          cellType,
+        );
+        // remove single-cell peninsulas
+        grid.changeRule(
+          cellType,
+          CellType.DEBUG_CENTER,
+          3,
+          CellType.DEBUG_CENTER,
+        );
+      }
     }
   }
 

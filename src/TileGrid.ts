@@ -47,17 +47,17 @@ export class TileGrid {
   expand(
     toCellType: CellType,
     isValidCell: (value: CellType) => boolean,
-    chance: number = 1,
   ) {
     let validCells = [];
     this.forEachCell((x, y) => {
       if (isValidCell(this.get(x, y))) {
         const neighborCount = this.countNeighborsOfType(x, y, toCellType);
-        if (neighborCount > 1 && Math.random() < chance) {
+        if (neighborCount > 1) {
           validCells.push([x, y]);
         }
       }
     });
+
 
     for (const [x, y] of validCells) {
       this.set(x, y, toCellType);
