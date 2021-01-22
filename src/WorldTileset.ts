@@ -1,8 +1,9 @@
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
-import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner } from './types';
+import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner, Coord } from './types';
 import { bresenhamLinePlot } from './utils';
-import { EdgeFeature, HexFeature, TerrainType, terrainTransitions, CornerFeature } from './World';
+import { EdgeFeature, HexFeature, TerrainType, terrainTransitions, CornerFeature, TerrainTypeMap } from './World';
+import { MultiDictionary } from 'typescript-collections';
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -64,7 +65,7 @@ const cellTypeColor = {
   [CellType.RIVER_MOUTH]: [26, 118, 189],
 }
 
-const terrainPrimaryCellTypes = {
+const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
   [TerrainType.OCEAN]: CellType.OCEAN,
   [TerrainType.GRASSLAND]: CellType.GRASS,
   [TerrainType.FOREST]: CellType.FOREST,
@@ -83,7 +84,7 @@ const TILE_Y_OFFSET = 10;
 const HALF_W = (TILE_WIDTH / 2);
 const HALF_H = (TILE_HEIGHT / 2);
 const QUARTER_W = (TILE_WIDTH / 4);
-const directionCornerPoints = [
+const directionCornerPoints: [p1: Coord, p2: Coord][] = [
   [[HALF_W + QUARTER_W, TILE_HEIGHT - 1], [TILE_WIDTH - 1, HALF_H]], // SE
   [[TILE_WIDTH - 1, HALF_H - 1], [HALF_W + QUARTER_W, 0]], // NE
   [[HALF_W + QUARTER_W - 1, 0], [QUARTER_W, 0]], // N
@@ -131,9 +132,11 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
   const height = TILE_HEIGHT;
   const grid = new TileGrid(hexTile, width, height);
 
-  let edgeTypes: Set<CellType> = new Set();
+  let growCellTypes: Set<CellType> = new Set();
+  const cornerPoints = [];
+  const cellTypePoints: MultiDictionary<CellType, Coord> = new MultiDictionary();
   let shouldDrawRiverMouth = false;
-  let edgePoints: Partial<DirectionMap<CoordArray>> = {};
+  let edgePoints: Partial<DirectionMap<Coord>> = {};
   directionCornerPoints.forEach((directionPoint, directionIndex) => {
     const points = bresenhamLinePlot(
       Math.round(directionPoint[0][0]), Math.round(directionPoint[0][1]),
@@ -146,14 +149,15 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
       let cellType: CellType = terrainPrimaryCellTypes[hexTile.terrainType];
       if (hexTile.edgeFeatures[directionIndex] === EdgeFeature.RIVER) {
         cellType = CellType.RIVER;
-        edgeTypes.add(cellType);
+        growCellTypes.add(cellType);
       } else if (terrainTransitions[hexTile.terrainType] && terrainTransitions[hexTile.terrainType].includes(edgeTerrainType)) {
         cellType = terrainPrimaryCellTypes[edgeTerrainType];
-        edgeTypes.add(cellType);
+        growCellTypes.add(cellType);
       } else if (terrainTransitions[hexTile.terrainType]) {
         cellType = terrainPrimaryCellTypes[hexTile.terrainType];
-        edgeTypes.add(cellType);
+        growCellTypes.add(cellType);
       }
+      cellTypePoints.setValue(cellType, [x, y]);
       grid.set(x, y, cellType);
 
       for (let corner of directionCorners[directionIndex]) {
@@ -162,14 +166,20 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
         const p1 = directionCornerPoints[dir1][1];
         const p2 = directionCornerPoints[dir2][0];
         const cornerTerrain = hexTile.cornerTerrainTypes[corner];
-        grid.set(p1[0], p1[1], terrainPrimaryCellTypes[cornerTerrain]);
-        grid.set(p2[0], p2[1], terrainPrimaryCellTypes[cornerTerrain]);
+        // const cornerType = CellType.DEBUG_N;
         const cornerType = terrainPrimaryCellTypes[cornerTerrain];
-        if (cornerType === CellType.RIVER_MOUTH) {
-          shouldDrawRiverMouth = true;
-        } else {
-          edgeTypes.add(cornerType);
-        }
+        grid.set(p1[0], p1[1], cornerType);
+        grid.set(p2[0], p2[1], cornerType);
+        // if (cornerType === CellType.RIVER_MOUTH) {
+        //   shouldDrawRiverMouth = true;
+        // }
+        cornerPoints.push({
+          cellType: cornerType,
+          points: [p1, p2],
+        });
+        growCellTypes.add(cornerType);
+        cellTypePoints.setValue(cornerType, p1);
+        cellTypePoints.setValue(cornerType, p2);
       }
     }
   });
@@ -183,32 +193,56 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
     value => value === 0,
   );
 
-  if (shouldDrawRiverMouth) {
-    for (let count = 0; count < 12; count++) {
-      grid.grow(
-        CellType.RIVER_MOUTH,
-        value => value !== CellType.RIVER_MOUTH && value !== CellType.NONE,
-      );
-    }
+  for (const { cellType, points } of cornerPoints) {
+    grid.expand(
+      points,
+      value => value === CellType.DEBUG_CENTER,
+      cellType,
+      cellType === CellType.RIVER_MOUTH ? 6 : 3,
+    );
   }
 
-  // expand coastlines
-  for (let count = 0; count < 7; count++) {
-    for (const cellType of edgeTypes) {
-      if (cellType === CellType.RIVER && count > 5) {
+  // if (shouldDrawRiverMouth) {
+  //   for (let count = 0; count < 5; count++) {
+  //     grid.grow(
+  //       CellType.RIVER_MOUTH,
+  //       // value => value !== CellType.RIVER_MOUTH && value !== CellType.NONE,
+  //       value => value == CellType.DEBUG_CENTER,
+  //     );
+  //   }
+  // }
+
+  // faster coastlines
+  for (let count = 0; count < 6; count++) {
+    for (const cellType of cellTypePoints.keys()) {
+      let cells;
+      if (cellType === CellType.RIVER && count > 3) {
         continue;
       }
-      grid.grow(
-        cellType,
-        value => value !== cellType && value !== CellType.RIVER_MOUTH,
-      );
+      if (count > 2) {
+        cells = grid.expandNaturally(
+          cellTypePoints.getValue(cellType),
+          value => value == CellType.DEBUG_CENTER,
+          cellType,
+        );
+      } else {
+        cells = grid.expand(
+          cellTypePoints.getValue(cellType),
+          value => value == CellType.DEBUG_CENTER,
+          cellType,
+        );
+      }
+      cellTypePoints.remove(cellType);
+      for (const coord of cells) {
+        cellTypePoints.setValue(cellType, coord);
+      }
     }
   }
 
   // clean up coastline
-  for (const cellType of edgeTypes) {
+  for (const cellType of growCellTypes) {
     if (cellType === CellType.RIVER) {
-      for (let count = 0; count < 3; count++) {
+      for (let count = 0; count < 1; count++) {
         grid.changeRule(
           CellType.DEBUG_CENTER,
           cellType,
@@ -223,7 +257,7 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
         );
       }
     } else {
-      for (let count = 0; count < 3; count++) {
+      for (let count = 0; count < 1; count++) {
         // remove island cells
         grid.changeRule(
           CellType.DEBUG_CENTER,
@@ -243,6 +277,7 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
   }
 
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
+  // const centerCellType = CellType.DEBUG_N;
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
   // convert to image

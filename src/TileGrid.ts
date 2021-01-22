@@ -1,6 +1,7 @@
 import ndarray from 'ndarray';
 import { floodFill } from './utils';
 import { HexTile, CellType } from './WorldTileset';
+import { Coord, CoordArray } from './types';
 
 export class TileGrid {
   public grid: ndarray;
@@ -45,24 +46,74 @@ export class TileGrid {
   }
 
   expand(
-    toCellType: CellType,
+    cells: Coord[],
     isValidCell: (value: CellType) => boolean,
+    toCellType: CellType,
+    times: number = 1,
+    chance: number = 1,
   ) {
-    let validCells = [];
-    this.forEachCell((x, y) => {
-      if (isValidCell(this.get(x, y))) {
-        const neighborCount = this.countNeighborsOfType(x, y, toCellType);
-        if (neighborCount > 1) {
-          validCells.push([x, y]);
+    for (let count = 0; count < times; count++) {
+      const newCells = [];
+      for (const [x, y] of cells) {
+        if (Math.random() < chance && isValidCell(this.get(x - 1, y))) {
+          newCells.push([x - 1, y]);
+          this.set(x - 1, y, toCellType);
+        }
+        if (Math.random() < chance && isValidCell(this.get(x + 1, y))) {
+          newCells.push([x + 1, y]);
+          this.set(x + 1, y, toCellType);
+        }
+        if (Math.random() < chance && isValidCell(this.get(x, y - 1))) {
+          newCells.push([x, y - 1]);
+          this.set(x, y - 1, toCellType);
+        }
+        if (Math.random() < chance && isValidCell(this.get(x, y + 1))) {
+          newCells.push([x, y + 1]);
+          this.set(x, y + 1, toCellType);
         }
       }
-    });
-
-
-    for (const [x, y] of validCells) {
-      this.set(x, y, toCellType);
+      cells = newCells;
+      if (cells.length === 0) return [];
     }
+    return cells;
   }
+
+  expandNaturally(
+    cells: Coord[],
+    isValidCell: (value: CellType) => boolean,
+    toCellType: CellType,
+    times: number = 1,
+  ) {
+    for (let count = 0; count < times; count++) {
+      const newCells: CoordArray = [];
+      let validCells: CoordArray = [];
+      for (const [x, y] of cells) {
+        validCells = [];
+        if (isValidCell(this.get(x - 1, y))) {
+          validCells.push([x - 1, y]);
+        }
+        if (isValidCell(this.get(x + 1, y))) {
+          validCells.push([x + 1, y]);
+        }
+        if (isValidCell(this.get(x, y - 1))) {
+          validCells.push([x, y - 1]);
+        }
+        if (isValidCell(this.get(x, y + 1))) {
+          validCells.push([x, y + 1]);
+        }
+        if (Math.random() < (validCells.length / 4)) {
+          for (const cell of validCells) {
+            newCells.push(cell);
+            this.set(cell[0], cell[1], toCellType);
+          }
+        }
+      }
+      cells = newCells;
+      if (cells.length === 0) return [];
+    }
+    return cells;
+  }
+
 
   /**
    * Transforms cells from one CellType to another, with a higher chance the more neighbors

@@ -104,7 +104,7 @@ export const cornerTitles: CornerMap<string> = {
   [Corner.TOP_LEFT]: 'Top Left',
   [Corner.TOP_RIGHT]: 'Top Right',
 }
-export const directionCorners = {
+export const directionCorners: DirectionMap<[Corner, Corner]> = {
   [Direction.SE]: [Corner.RIGHT, Corner.BOTTOM_RIGHT],
   [Direction.NE]: [Corner.TOP_RIGHT, Corner.RIGHT],
   [Direction.N]: [Corner.TOP_LEFT, Corner.TOP_RIGHT],

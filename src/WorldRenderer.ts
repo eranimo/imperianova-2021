@@ -125,8 +125,7 @@ export class WorldRenderer {
         ) {
           cornerTerrainTypes[corner] = TerrainType.RIVER;
         } else if (
-          // river mouth
-          terrainType === TerrainType.OCEAN && 
+          // river mouth / end
           this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)
         ) {
           cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
