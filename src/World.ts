@@ -21,6 +21,7 @@ export enum TerrainType {
   GLACIAL = 7,
   RIVER = 8, // special
   RIVER_MOUTH = 9, // special
+  RIVER_SOURCE = 10, // special
   __LENGTH,
 }
 
@@ -37,6 +38,7 @@ export const terrainColors: TerrainTypeMap<number> = {
   [TerrainType.GLACIAL]: 0xFAFAFA,
   [TerrainType.RIVER]: 0x3F78CB,
   [TerrainType.RIVER_MOUTH]: 0x3F78CB,
+  [TerrainType.RIVER_SOURCE]: 0x3F78CB,
 };
 
 export const terrainMinimapColors: TerrainTypeMap<string> = {
@@ -50,6 +52,7 @@ export const terrainMinimapColors: TerrainTypeMap<string> = {
   [TerrainType.GLACIAL]: '#FAFAFA',
   [TerrainType.RIVER]: '#3F78CB',
   [TerrainType.RIVER_MOUTH]: '#3F78CB',
+  [TerrainType.RIVER_SOURCE]: '#3F78CB',
 };
 
 export const terrainTypeTitles: TerrainTypeMap<string> = {
@@ -61,8 +64,9 @@ export const terrainTypeTitles: TerrainTypeMap<string> = {
   [TerrainType.TAIGA]: 'Taiga',
   [TerrainType.TUNDRA]: 'Tundra',
   [TerrainType.GLACIAL]: 'Glacial',
-  [TerrainType.RIVER]: 'Ocean',
-  [TerrainType.RIVER_MOUTH]: 'Ocean',
+  [TerrainType.RIVER]: 'River',
+  [TerrainType.RIVER_MOUTH]: 'River Mouth',
+  [TerrainType.RIVER_SOURCE]: 'River Source',
 };
 
 export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {

@@ -32,7 +32,7 @@ export class WorldGenerator {
     this.seed = options.seed;
   }
 
-  @logGroupTime('generate')
+  @logGroupTime('generate', true)
   generate() {
     this.generateTerrain();
     this.generateRivers();

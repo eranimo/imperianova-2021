@@ -1,6 +1,6 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { Direction, DirectionMap, CornerMap, directionShort, adjacentDirections, directionCorners, directionIndexOrder, Corner, cornerIndexOrder, cornerDirections } from './types';
+import { Direction, DirectionMap, CornerMap, directionShort, adjacentDirections, directionCorners, directionIndexOrder, Corner, cornerIndexOrder, cornerDirections, Assets } from './types';
 import { colorToNumber } from './utils';
 import { EdgeFeature, HexFeature, TerrainType, World, terrainColors, CornerFeature, terrainTransitions } from './World';
 import { WorldTileset } from './WorldTileset';
@@ -20,13 +20,13 @@ export class WorldRenderer {
   worldTileset: WorldTileset;
   chunksLayer: PIXI.Container;
 
-  constructor(private app: PIXI.Application, world: World) {
+  constructor(private app: PIXI.Application, world: World, assets: Assets) {
     this.world = world;
     this.debugGraphics = new PIXI.Graphics();
     this.worldWidth = this.world.hexgrid.pointWidth();
     this.worldHeight = this.world.hexgrid.pointHeight();
     this.chunksLayer = new PIXI.Container();
-    this.worldTileset = new WorldTileset(this.app.renderer);
+    this.worldTileset = new WorldTileset(this.app.renderer, assets);
     console.log(this.worldTileset);
     
     this.chunkTileLayers = new Map();
@@ -92,19 +92,22 @@ export class WorldRenderer {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
       if (terrainType === TerrainType.MAP_EDGE) return;
       const hexObj = this.world.getHex(hex.x, hex.y);
-      const edgeFeatures: DirectionMap<EdgeFeature> = {
-        [Direction.SE]: EdgeFeature.NONE,
-        [Direction.NE]: EdgeFeature.NONE,
-        [Direction.N]: EdgeFeature.NONE,
-        [Direction.NW]: EdgeFeature.NONE,
-        [Direction.SW]: EdgeFeature.NONE,
-        [Direction.S]: EdgeFeature.NONE,
-      };
       const cornerTerrainTypes: Partial<CornerMap<TerrainType>> = {};
+
+      const edgeTerrainTypes = this.world.getHexNeighborTerrain(hex.x, hex.y);
+      for (let direction of directionIndexOrder) {
+        const edgeTerrainType = edgeTerrainTypes[direction];
+        if (!(
+          terrainTransitions[terrainType] && 
+          terrainTransitions[terrainType].includes(edgeTerrainType)
+        )) {
+          edgeTerrainTypes[direction] = terrainType;
+        }
+      }
       if (this.world.hexRiverEdges.containsKey(hexObj)) {
         const riverDirections = this.world.hexRiverEdges.getValue(hexObj);
         for (let dir of riverDirections) {
-          edgeFeatures[dir] = EdgeFeature.RIVER;
+          edgeTerrainTypes[dir] = TerrainType.RIVER;
         }
       }
 
@@ -128,7 +131,10 @@ export class WorldRenderer {
           // river mouth / end
           this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)
         ) {
-          cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
+          // cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
+          cornerTerrainTypes[corner] = terrainType === TerrainType.OCEAN
+            ? TerrainType.RIVER_MOUTH
+            : TerrainType.RIVER_SOURCE;
         } else {
           let cornerTerrainType: TerrainType = TerrainType.MAP_EDGE;
           if (neighborOne && neighborTwo) {
@@ -156,9 +162,8 @@ export class WorldRenderer {
 
       const hexTileID = this.worldTileset.getTile({
         terrainType,
-        edgeTerrainTypes: this.world.getHexNeighborTerrain(hex.x, hex.y),
+        edgeTerrainTypes,
         cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
-        edgeFeatures,
         hexFeature: HexFeature.NONE,
       });
       const texture = this.worldTileset.getTextureForID(hexTileID);

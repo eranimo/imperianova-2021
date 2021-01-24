@@ -9,9 +9,14 @@ export class TileGrid {
   constructor(
     public hexTile: HexTile,
     public width: number,
-    public height: number
+    public height: number,
+    buffer?: Uint8Array,
   ) {
-    this.grid = ndarray(new Uint8Array(width * height), [width, height]);
+    if (buffer) {
+      this.grid = ndarray(buffer);
+    } else {
+      this.grid = ndarray(new Uint8Array(width * height), [width, height]);
+    }
   }
 
   /**
@@ -28,12 +33,13 @@ export class TileGrid {
     neighborCellType: CellType,
     validNeighborCount: number,
     toCellType: CellType,
-    chance: number = 1
+    useDiagonals = false,
+    chance: number = 1,
   ) {
     let validCells = [];
     this.forEachCell((x, y) => {
       if (this.get(x, y) === targetCellType) {
-        const neighborCount = this.countNeighborsOfType(x, y, neighborCellType);
+        const neighborCount = this.countNeighborsOfType(x, y, neighborCellType, useDiagonals);
         if (neighborCount >= validNeighborCount && Math.random() < chance) {
           validCells.push([x, y]);
         }
@@ -53,23 +59,23 @@ export class TileGrid {
     chance: number = 1,
   ) {
     for (let count = 0; count < times; count++) {
-      const newCells = [];
+      const newCells: CoordArray = [];
+      let validCells: CoordArray = [];
       for (const [x, y] of cells) {
-        if (Math.random() < chance && isValidCell(this.get(x - 1, y))) {
-          newCells.push([x - 1, y]);
-          this.set(x - 1, y, toCellType);
+        validCells = [];
+        for (let nx = -1; nx <= 1; nx++) {
+          for (let ny = -1; ny <= 1; ny++) {
+            if (nx === 0 && ny === 0) continue;
+            if (isValidCell(this.get(x + nx, y + ny))) {
+              validCells.push([x + nx, y + ny]);
+            }
+          }
         }
-        if (Math.random() < chance && isValidCell(this.get(x + 1, y))) {
-          newCells.push([x + 1, y]);
-          this.set(x + 1, y, toCellType);
-        }
-        if (Math.random() < chance && isValidCell(this.get(x, y - 1))) {
-          newCells.push([x, y - 1]);
-          this.set(x, y - 1, toCellType);
-        }
-        if (Math.random() < chance && isValidCell(this.get(x, y + 1))) {
-          newCells.push([x, y + 1]);
-          this.set(x, y + 1, toCellType);
+        for (const cell of validCells) {
+          if (Math.random() < chance) {
+            newCells.push(cell);
+            this.set(cell[0], cell[1], toCellType);
+          }
         }
       }
       cells = newCells;
@@ -83,26 +89,24 @@ export class TileGrid {
     isValidCell: (value: CellType) => boolean,
     toCellType: CellType,
     times: number = 1,
+    chance: number = 1,
   ) {
     for (let count = 0; count < times; count++) {
       const newCells: CoordArray = [];
       let validCells: CoordArray = [];
       for (const [x, y] of cells) {
         validCells = [];
-        if (isValidCell(this.get(x - 1, y))) {
-          validCells.push([x - 1, y]);
+        for (let nx = -1; nx <= 1; nx++) {
+          for (let ny = -1; ny <= 1; ny++) {
+            if (nx === 0 && ny === 0) continue;
+            if (isValidCell(this.get(x + nx, y + ny))) {
+              validCells.push([x + nx, y + ny]);
+            }
+          }
         }
-        if (isValidCell(this.get(x + 1, y))) {
-          validCells.push([x + 1, y]);
-        }
-        if (isValidCell(this.get(x, y - 1))) {
-          validCells.push([x, y - 1]);
-        }
-        if (isValidCell(this.get(x, y + 1))) {
-          validCells.push([x, y + 1]);
-        }
-        if (Math.random() < (validCells.length / 4)) {
-          for (const cell of validCells) {
+        for (const cell of validCells) {
+          const neighborCount = this.countNeighborsOfType(cell[0], cell[1], toCellType);
+          if (Math.random() < (neighborCount / 7) && Math.random() < chance) {
             newCells.push(cell);
             this.set(cell[0], cell[1], toCellType);
           }
@@ -129,7 +133,7 @@ export class TileGrid {
     this.forEachCell((x, y) => {
       if (isValidCell(this.get(x, y))) {
         const neighborCount = this.countNeighborsOfType(x, y, toCellType);
-        if (Math.random() < (neighborCount / 4)) {
+        if (Math.random() < (neighborCount / 7)) {
           validCells.push([x, y]);
         }
       }
@@ -143,17 +147,29 @@ export class TileGrid {
   countNeighborsOfType(
     x: number,
     y: number,
-    cellType: CellType
+    cellType: CellType,
+    diagonals: boolean = true
   ) {
     let count = 0;
-    if (this.get(x - 1, y) === cellType)
-      count++;
-    if (this.get(x + 1, y) === cellType)
-      count++;
-    if (this.get(x, y - 1) === cellType)
-      count++;
-    if (this.get(x, y + 1) === cellType)
-      count++;
+    if (!diagonals) {
+      if (this.get(x - 1, y) === cellType)
+        count++;
+      if (this.get(x + 1, y) === cellType)
+        count++;
+      if (this.get(x, y - 1) === cellType)
+        count++;
+      if (this.get(x, y + 1) === cellType)
+        count++;
+    } else {
+      for (let nx = -1; nx <= 1; nx++) {
+        for (let ny = -1; ny <= 1; ny++) {
+          if (nx === 0 && ny === 0) continue;
+          if (this.get(x + nx, y + ny) === cellType) {
+            count++;
+          }
+        }
+      }
+    }
     return count;
   }
 

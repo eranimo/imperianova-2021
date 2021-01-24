@@ -6,6 +6,11 @@ export type Size = {
 export type Coord = [x: number, y: number];
 export type CoordArray = Coord[];
 
+export type Assets = {
+  hexTemplate: PIXI.LoaderResource
+};
+
+export type ColorArray = [r: number, g: number, b: number];
 
 export enum Direction {
   SE = 0,

@@ -1,15 +1,15 @@
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
-import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner, Coord } from './types';
+import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner, Coord, Assets, cornerIndexOrder, ColorArray } from './types';
 import { bresenhamLinePlot } from './utils';
 import { EdgeFeature, HexFeature, TerrainType, terrainTransitions, CornerFeature, TerrainTypeMap } from './World';
 import { MultiDictionary } from 'typescript-collections';
+import ndarray from 'ndarray';
 
 export type HexTile = {
   terrainType: TerrainType,
   edgeTerrainTypes: DirectionMap<TerrainType | null>,
   cornerTerrainTypes: CornerMap<TerrainType | null>,
-  edgeFeatures: DirectionMap<EdgeFeature>,
   hexFeature: HexFeature,
 }
 
@@ -24,15 +24,23 @@ export enum CellType {
   DEBUG_S = 6,
   DEBUG_CENTER = 7,
 
-  OCEAN = 8,
-  GRASS = 9,
-  BEACH = 10,
-  FOREST = 11,
-  ICE = 12,
-  SAND = 13,
-  TUNDRA = 14,
-  RIVER = 15,
-  RIVER_MOUTH = 16,
+  DEBUG_RIGHT = 8,
+  DEBUG_BOTTOM_RIGHT = 9,
+  DEBUG_BOTTOM_LEFT = 10,
+  DEBUG_LEFT = 11,
+  DEBUG_TOP_LEFT = 12,
+  DEBUG_TOP_RIGHT = 13,
+
+  OCEAN = 14,
+  GRASS = 15,
+  BEACH = 16,
+  FOREST = 17,
+  ICE = 18,
+  SAND = 19,
+  TUNDRA = 20,
+  RIVER = 21,
+  RIVER_MOUTH = 22,
+  RIVER_SOURCE = 22,
 };
 
 
@@ -53,6 +61,13 @@ const cellTypeColor = {
   [CellType.DEBUG_SW]: [255, 255, 0],
   [CellType.DEBUG_S]: [0, 255, 0],
   [CellType.DEBUG_CENTER]: [0, 0, 0],
+
+  [CellType.DEBUG_RIGHT]: [0, 125, 125],
+  [CellType.DEBUG_BOTTOM_RIGHT]: [0, 0, 125],
+  [CellType.DEBUG_BOTTOM_LEFT]: [0, 125, 0],
+  [CellType.DEBUG_LEFT]: [125, 0, 0],
+  [CellType.DEBUG_TOP_LEFT]: [125, 0, 125],
+  [CellType.DEBUG_TOP_RIGHT]: [125, 125, 0],
   
   [CellType.OCEAN]: [37, 140, 219],
   [CellType.GRASS]: [29, 179, 39],
@@ -62,7 +77,26 @@ const cellTypeColor = {
   [CellType.SAND]: [217, 191, 140],
   [CellType.TUNDRA]: [150, 209, 195],
   [CellType.RIVER]: [26, 118, 189],
-  [CellType.RIVER_MOUTH]: [26, 118, 189],
+  [CellType.RIVER_MOUTH]: [16, 108, 179],
+  [CellType.RIVER_SOURCE]: [36, 128, 199],
+}
+
+const directionCellTypes = {
+  [Direction.SE]: CellType.DEBUG_SE,
+  [Direction.NE]: CellType.DEBUG_NE,
+  [Direction.N]: CellType.DEBUG_N,
+  [Direction.NW]: CellType.DEBUG_NW,
+  [Direction.SW]: CellType.DEBUG_SW,
+  [Direction.S]: CellType.DEBUG_S,
+}
+
+const cornerCellTypes = {
+  [Corner.RIGHT]: CellType.DEBUG_RIGHT,
+  [Corner.BOTTOM_RIGHT]: CellType.DEBUG_BOTTOM_RIGHT,
+  [Corner.BOTTOM_LEFT]: CellType.DEBUG_BOTTOM_LEFT,
+  [Corner.LEFT]: CellType.DEBUG_LEFT,
+  [Corner.TOP_LEFT]: CellType.DEBUG_TOP_LEFT,
+  [Corner.TOP_RIGHT]: CellType.DEBUG_TOP_RIGHT,
 }
 
 const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
@@ -75,23 +109,8 @@ const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
   [TerrainType.DESERT]: CellType.SAND,
   [TerrainType.RIVER]: CellType.RIVER,
   [TerrainType.RIVER_MOUTH]: CellType.RIVER_MOUTH,
-}
-
-const TILE_WIDTH = 64;
-const TILE_HEIGHT = 60;
-const TILE_Y_OFFSET = 10;
-// 64 x 64
-const HALF_W = (TILE_WIDTH / 2);
-const HALF_H = (TILE_HEIGHT / 2);
-const QUARTER_W = (TILE_WIDTH / 4);
-const directionCornerPoints: [p1: Coord, p2: Coord][] = [
-  [[HALF_W + QUARTER_W, TILE_HEIGHT - 1], [TILE_WIDTH - 1, HALF_H]], // SE
-  [[TILE_WIDTH - 1, HALF_H - 1], [HALF_W + QUARTER_W, 0]], // NE
-  [[HALF_W + QUARTER_W - 1, 0], [QUARTER_W, 0]], // N
-  [[QUARTER_W - 1, 0], [0, HALF_H - 1]], // NW
-  [[0, HALF_H], [QUARTER_W - 1, TILE_HEIGHT - 1]], // SW
-  [[QUARTER_W, TILE_HEIGHT - 1], [HALF_W + QUARTER_W - 1, TILE_HEIGHT - 1]], // S
-];
+  [TerrainType.RIVER_SOURCE]: CellType.RIVER_SOURCE,
+};
 
 function getHexTileID(hexTile: HexTile) {
   return (
@@ -114,76 +133,66 @@ function getHexTileID(hexTile: HexTile) {
     (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_LEFT)) * hexTile.cornerTerrainTypes[Corner.TOP_LEFT]) +
     (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_RIGHT)) * hexTile.cornerTerrainTypes[Corner.TOP_RIGHT]) +
 
-    // edge fatures
-    ((EdgeFeature.__LENGTH ** (13 + Direction.SE)) * hexTile.edgeFeatures[Direction.SE]) +
-    ((EdgeFeature.__LENGTH ** (13 + Direction.NE)) * hexTile.edgeFeatures[Direction.NE]) +
-    ((EdgeFeature.__LENGTH ** (13 + Direction.N)) * hexTile.edgeFeatures[Direction.N]) +
-    ((EdgeFeature.__LENGTH ** (13 + Direction.NW)) * hexTile.edgeFeatures[Direction.NW]) +
-    ((EdgeFeature.__LENGTH ** (13 + Direction.SW)) * hexTile.edgeFeatures[Direction.SW]) +
-    ((EdgeFeature.__LENGTH ** (13 + Direction.S)) * hexTile.edgeFeatures[Direction.S]) +
-
     // hex features
-    ((HexFeature.__LENGTH ** 18) * hexTile.hexFeature)
+    ((HexFeature.__LENGTH ** 13) * hexTile.hexFeature)
   );
 }
 
-function drawHexTile(hexTile: HexTile): PIXI.Texture {
-  const width = TILE_WIDTH;
-  const height = TILE_HEIGHT;
+function drawHexTile(
+  hexTile: HexTile,
+  width: number,
+  height: number,
+  templateGrid: ndarray,
+): PIXI.Texture {
   const grid = new TileGrid(hexTile, width, height);
+  let cleanupCellTypes: Set<CellType> = new Set();
+  let cellTypePoints = new Map();
+  // replace template grid with correct cell types
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      grid.set(x, y, templateGrid.get(x, y));
+    }
+  }
 
-  let growCellTypes: Set<CellType> = new Set();
-  const cornerPoints = [];
-  const cellTypePoints: MultiDictionary<CellType, Coord> = new MultiDictionary();
-  let shouldDrawRiverMouth = false;
-  let edgePoints: Partial<DirectionMap<Coord>> = {};
-  directionCornerPoints.forEach((directionPoint, directionIndex) => {
-    const points = bresenhamLinePlot(
-      Math.round(directionPoint[0][0]), Math.round(directionPoint[0][1]),
-      Math.round(directionPoint[1][0]), Math.round(directionPoint[1][1]),
+  const cellTypeReplacements = new Map<CellType, CellType>();
+  for (const direction of directionIndexOrder) {
+    const edgeTerrainType = hexTile.edgeTerrainTypes[direction] as TerrainType;
+    cellTypeReplacements.set(
+      directionCellTypes[direction],
+      terrainPrimaryCellTypes[edgeTerrainType]
     );
-    edgePoints[directionIndex] = points;
-    for (let [x, y] of points) {
-      // const cellType = directionToCellType[directionIndexOrder[i]];
-      const edgeTerrainType = hexTile.edgeTerrainTypes[directionIndex] as TerrainType;
-      let cellType: CellType = terrainPrimaryCellTypes[hexTile.terrainType];
-      if (hexTile.edgeFeatures[directionIndex] === EdgeFeature.RIVER) {
-        cellType = CellType.RIVER;
-        growCellTypes.add(cellType);
-      } else if (terrainTransitions[hexTile.terrainType] && terrainTransitions[hexTile.terrainType].includes(edgeTerrainType)) {
-        cellType = terrainPrimaryCellTypes[edgeTerrainType];
-        growCellTypes.add(cellType);
-      } else if (terrainTransitions[hexTile.terrainType]) {
-        cellType = terrainPrimaryCellTypes[hexTile.terrainType];
-        growCellTypes.add(cellType);
-      }
-      cellTypePoints.setValue(cellType, [x, y]);
-      grid.set(x, y, cellType);
+  }
 
-      for (let corner of directionCorners[directionIndex]) {
-        const dir1: Direction = cornerDirections[corner][1];
-        const dir2: Direction = cornerDirections[corner][0];
-        const p1 = directionCornerPoints[dir1][1];
-        const p2 = directionCornerPoints[dir2][0];
-        const cornerTerrain = hexTile.cornerTerrainTypes[corner];
-        // const cornerType = CellType.DEBUG_N;
-        const cornerType = terrainPrimaryCellTypes[cornerTerrain];
-        grid.set(p1[0], p1[1], cornerType);
-        grid.set(p2[0], p2[1], cornerType);
-        // if (cornerType === CellType.RIVER_MOUTH) {
-        //   shouldDrawRiverMouth = true;
-        // }
-        cornerPoints.push({
-          cellType: cornerType,
-          points: [p1, p2],
-        });
-        growCellTypes.add(cornerType);
-        cellTypePoints.setValue(cornerType, p1);
-        cellTypePoints.setValue(cornerType, p2);
+  for (const corner of cornerIndexOrder) {
+    const cornerTerrainType = hexTile.cornerTerrainTypes[corner] as TerrainType;
+    cellTypeReplacements.set(
+      cornerCellTypes[corner],
+      terrainPrimaryCellTypes[cornerTerrainType]
+    );
+  }
+
+  // replace debug cell types with real cell types
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      const cellType = grid.get(x, y);
+      if (cellTypeReplacements.has(cellType)) {
+        grid.set(x, y, cellTypeReplacements.get(cellType));
       }
     }
-  });
+  }
 
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) {
+      const cellType = grid.get(x, y);
+      if (cellType !== CellType.NONE && cellType !== CellType.DEBUG_CENTER) {
+        if (cellTypePoints.has(cellType)) {
+          cellTypePoints.get(cellType).push([x, y]);
+        } else {
+          cellTypePoints.set(cellType, [[x, y]]);
+        }
+      }
+    }
+  }
 
   // flood fill center of tile
   grid.floodFill(
@@ -193,86 +202,56 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
     value => value === 0,
   );
 
-  for (const { cellType, points } of cornerPoints) {
-    grid.expand(
-      points,
-      value => value === CellType.DEBUG_CENTER,
-      cellType,
-      cellType === CellType.RIVER_MOUTH ? 6 : 3,
-    );
-  }
+  // faster terrain transitions
 
-  // if (shouldDrawRiverMouth) {
-  //   for (let count = 0; count < 5; count++) {
-  //     grid.grow(
-  //       CellType.RIVER_MOUTH,
-  //       // value => value !== CellType.RIVER_MOUTH && value !== CellType.NONE,
-  //       value => value == CellType.DEBUG_CENTER,
-  //     );
-  //   }
-  // }
-
-  // faster coastlines
-  for (let count = 0; count < 6; count++) {
-    for (const cellType of cellTypePoints.keys()) {
-      let cells;
-      if (cellType === CellType.RIVER && count > 3) {
-        continue;
-      }
+  for (let count = 0; count < 5; count++) {
+    if (cellTypePoints.has(CellType.RIVER_MOUTH)) {
+      const cellType = CellType.RIVER_MOUTH;
+      const cells = cellTypePoints.get(cellType);
+      let newCells: CoordArray;
       if (count > 2) {
-        cells = grid.expandNaturally(
-          cellTypePoints.getValue(cellType),
+        newCells = grid.expandNaturally(
+          cells,
           value => value == CellType.DEBUG_CENTER,
           cellType,
         );
       } else {
-        cells = grid.expand(
-          cellTypePoints.getValue(cellType),
+        newCells = grid.expand(
+          cells,
           value => value == CellType.DEBUG_CENTER,
           cellType,
         );
       }
-      cellTypePoints.remove(cellType);
-      for (const coord of cells) {
-        cellTypePoints.setValue(cellType, coord);
-      }
+      cellTypePoints.set(cellType, newCells);
     }
-  }
-
-  // clean up coastline
-  for (const cellType of growCellTypes) {
-    if (cellType === CellType.RIVER) {
-      for (let count = 0; count < 1; count++) {
-        grid.changeRule(
-          CellType.DEBUG_CENTER,
+    for (const [cellType, cells] of cellTypePoints) {
+      if (cellType === CellType.RIVER_MOUTH) continue;
+      let newCells: CoordArray;
+      if (cellType === CellType.RIVER && count > 3) {
+        continue;
+      }
+      if (count > 1) {
+        newCells = grid.expandNaturally(
+          cells,
+          value => value == CellType.DEBUG_CENTER,
           cellType,
-          3,
-          cellType,
+          1,
+          cellType === CellType.RIVER ? 0.5 : 1,
         );
-        grid.changeRule(
+      } else {
+        newCells = grid.expand(
+          cells,
+          value => value == CellType.DEBUG_CENTER,
           cellType,
-          CellType.DEBUG_CENTER,
-          3,
-          CellType.DEBUG_CENTER,
         );
       }
-    } else {
-      for (let count = 0; count < 1; count++) {
-        // remove island cells
-        grid.changeRule(
-          CellType.DEBUG_CENTER,
-          cellType,
-          3,
-          cellType,
-        );
-        // remove single-cell peninsulas
-        grid.changeRule(
-          cellType,
-          CellType.DEBUG_CENTER,
-          3,
-          CellType.DEBUG_CENTER,
-        );
-      }
+      grid.changeRule(
+        CellType.DEBUG_CENTER,
+        cellType,
+        4,
+        cellType,
+      );
+      cellTypePoints.set(cellType, newCells);
     }
   }
 
@@ -307,6 +286,14 @@ function drawHexTile(hexTile: HexTile): PIXI.Texture {
   return PIXI.Texture.fromBuffer(buffer, width, height);
 }
 
+function colorArrayMatches(color1: ColorArray, color2: ColorArray) {
+  return (
+    color1[0] === color2[0] &&
+    color1[1] === color2[1] &&
+    color1[2] === color2[2]
+  )
+}
+
 export class WorldTileset {
   public renderTexture: PIXI.RenderTexture;
   public texture: PIXI.Texture;
@@ -316,9 +303,11 @@ export class WorldTileset {
   private hexTileTexture: Map<number, PIXI.Texture>;
   private tileIDToIndex: Map<number, number>;
   public numTiles: number;
+  templateGrid: ndarray;
 
   constructor(
     private renderer: PIXI.Renderer,
+    private assets: Assets,
   ) {
     console.time('geenrate world tileset');
     console.timeEnd('geenrate world tileset');
@@ -335,18 +324,67 @@ export class WorldTileset {
     this.renderTexture = new PIXI.RenderTexture(rt);
     this.tileIDToIndex = new Map();
     this.numTiles = 0;
+
+    // generate template grid buffer
+    const templateGridBuffer = new Uint8Array(this.tileWidth * this.tileHeight);
+    this.templateGrid = ndarray(templateGridBuffer, [this.tileWidth, this.tileHeight]);
+    const templateImage = (assets.hexTemplate.texture.baseTexture.resource as any).source as HTMLImageElement;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(templateImage, 0, 0);
+    const imageData = ctx.getImageData(0, 0, this.tileWidth, this.tileHeight);
+    for (let x = 0; x < this.tileWidth; x++) {
+      for (let y = 0; y < this.tileWidth; y++) {
+        const index = (x + y * this.tileWidth) * 4;
+        this.templateGrid.set(x, y, CellType.NONE);
+        const thisColor: ColorArray = [
+          imageData.data[index],
+          imageData.data[index + 1],
+          imageData.data[index + 2],
+        ];
+       
+        for (const direction of directionIndexOrder) {
+          const cellType = directionCellTypes[direction];
+          const color = cellTypeColor[cellType];
+          if (colorArrayMatches(color, thisColor)) {
+            this.templateGrid.set(x, y, cellType);
+          }
+        }
+
+        for (const corner of cornerIndexOrder) {
+          const cellType = cornerCellTypes[corner];
+          const color = cellTypeColor[cellType];
+          if (colorArrayMatches(color, thisColor)) {
+            this.templateGrid.set(x, y, cellType);
+          }
+        }
+      }
+    }
+    console.log('template grid', this.templateGrid);
   }
 
   static COLUMNS = 200;
   static PADDING = 10;
   static MAX_TILES = 20_000;
 
+  get tileWidth() {
+    return this.assets.hexTemplate.texture.baseTexture.width;
+  }
+
+  get tileHeight() {
+    return this.assets.hexTemplate.texture.baseTexture.width;
+  }
+
+  get tileOffset() {
+    return 0;
+  }
+
   get pixelWidth() {
-    return WorldTileset.COLUMNS * (TILE_WIDTH + WorldTileset.PADDING);
+    return WorldTileset.COLUMNS * (this.tileWidth + WorldTileset.PADDING);
   }
 
   get pixelHeight() {
-    return this.rows * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING);
+    return this.rows * (this.tileHeight + this.tileOffset + WorldTileset.PADDING);
   }
 
   get rows() {
@@ -365,12 +403,12 @@ export class WorldTileset {
     this.numTiles++;
     this.tileIDToIndex.set(id, index);
     // console.time(`generating hex ID ${id}`);
-    const texture = drawHexTile(hexTile);
+    const texture = drawHexTile(hexTile, this.tileWidth, this.tileHeight, this.templateGrid);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
     sprite.position.set(
-      (index % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
-      (Math.floor(index / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
+      (index % WorldTileset.COLUMNS) * (this.tileWidth + WorldTileset.PADDING),
+      (Math.floor(index / WorldTileset.COLUMNS)) * (this.tileHeight + this.tileOffset + WorldTileset.PADDING),
     );
     this.container.addChild(sprite);
     this.hexTileSprite.set(id, sprite);
@@ -402,10 +440,10 @@ export class WorldTileset {
     }
     const index = this.tileIDToIndex.get(id);
     const texture = new PIXI.Texture(this.renderTexture.baseTexture, new PIXI.Rectangle(
-      (index % WorldTileset.COLUMNS) * (TILE_WIDTH + WorldTileset.PADDING),
-      (Math.floor(index / WorldTileset.COLUMNS)) * (TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING),
-      TILE_WIDTH + WorldTileset.PADDING,
-      TILE_HEIGHT + TILE_Y_OFFSET + WorldTileset.PADDING,
+      (index % WorldTileset.COLUMNS) * (this.tileWidth + WorldTileset.PADDING),
+      (Math.floor(index / WorldTileset.COLUMNS)) * (this.tileHeight + this.tileOffset + WorldTileset.PADDING),
+      this.tileWidth + WorldTileset.PADDING,
+      this.tileHeight + this.tileOffset + WorldTileset.PADDING,
     ));
     this.hexTileTexture.set(id, texture);
     return texture;
