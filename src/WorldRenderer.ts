@@ -126,7 +126,27 @@ export class WorldRenderer {
           (this.world.riverHexPairs.has(hexObj) && 
           this.world.riverHexPairs.get(hexObj).has(neighborOne))
         ) {
-          cornerTerrainTypes[corner] = TerrainType.RIVER;
+          if (
+            (this.world.riverHexPairs.has(hexObj) && 
+            this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
+            this.world.getTerrainForCoord(neighborOne.x, neighborOne.y) === TerrainType.OCEAN) ||
+            (this.world.riverHexPairs.has(hexObj) && 
+            this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
+            this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y) === TerrainType.OCEAN)
+          ) {
+            cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
+          } else if (
+            (this.world.riverHexPairs.has(hexObj) && 
+            this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
+            this.world.getTerrainForCoord(neighborOne.x, neighborOne.y) !== TerrainType.OCEAN) ||
+            (this.world.riverHexPairs.has(hexObj) && 
+            this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
+            this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y) !== TerrainType.OCEAN)
+          ) {
+            cornerTerrainTypes[corner] = TerrainType.RIVER_SOURCE;
+          } else {
+            cornerTerrainTypes[corner] = TerrainType.RIVER;
+          }
         } else if (
           // river mouth / end
           this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)

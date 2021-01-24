@@ -16,31 +16,44 @@ export type HexTile = {
 export enum CellType {
   NONE = 0,
 
-  DEBUG_SE = 1,
-  DEBUG_NE = 2,
-  DEBUG_N = 3,
-  DEBUG_NW = 4,
-  DEBUG_SW = 5,
-  DEBUG_S = 6,
-  DEBUG_CENTER = 7,
+  DEBUG_SE,
+  DEBUG_NE,
+  DEBUG_N,
+  DEBUG_NW,
+  DEBUG_SW,
+  DEBUG_S,
+  DEBUG_CENTER,
 
-  DEBUG_RIGHT = 8,
-  DEBUG_BOTTOM_RIGHT = 9,
-  DEBUG_BOTTOM_LEFT = 10,
-  DEBUG_LEFT = 11,
-  DEBUG_TOP_LEFT = 12,
-  DEBUG_TOP_RIGHT = 13,
+  DEBUG_RIGHT,
+  DEBUG_BOTTOM_RIGHT,
+  DEBUG_BOTTOM_LEFT,
+  DEBUG_LEFT,
+  DEBUG_TOP_LEFT,
+  DEBUG_TOP_RIGHT,
 
-  OCEAN = 14,
-  GRASS = 15,
-  BEACH = 16,
-  FOREST = 17,
-  ICE = 18,
-  SAND = 19,
-  TUNDRA = 20,
-  RIVER = 21,
-  RIVER_MOUTH = 22,
-  RIVER_SOURCE = 22,
+  DEBUG_RIGHT_0,
+  DEBUG_RIGHT_1,
+  DEBUG_BOTTOM_RIGHT_0,
+  DEBUG_BOTTOM_RIGHT_1,
+  DEBUG_BOTTOM_LEFT_0,
+  DEBUG_BOTTOM_LEFT_1,
+  DEBUG_LEFT_0,
+  DEBUG_LEFT_1,
+  DEBUG_TOP_LEFT_0,
+  DEBUG_TOP_LEFT_1,
+  DEBUG_TOP_RIGHT_0,
+  DEBUG_TOP_RIGHT_1,
+
+  OCEAN,
+  GRASS,
+  BEACH,
+  FOREST,
+  ICE,
+  SAND,
+  TUNDRA,
+  RIVER,
+  RIVER_MOUTH,
+  RIVER_SOURCE,
 };
 
 
@@ -68,6 +81,19 @@ const cellTypeColor = {
   [CellType.DEBUG_LEFT]: [125, 0, 0],
   [CellType.DEBUG_TOP_LEFT]: [125, 0, 125],
   [CellType.DEBUG_TOP_RIGHT]: [125, 125, 0],
+
+  [CellType.DEBUG_RIGHT_0]: [100, 0, 100],
+  [CellType.DEBUG_RIGHT_1]: [0, 200, 200],
+  [CellType.DEBUG_BOTTOM_RIGHT_0]: [0, 100, 100],
+  [CellType.DEBUG_BOTTOM_RIGHT_1]: [0, 200, 0],
+  [CellType.DEBUG_BOTTOM_LEFT_0]: [0, 100, 0],
+  [CellType.DEBUG_BOTTOM_LEFT_1]: [200, 200, 0],
+  [CellType.DEBUG_LEFT_0]: [100, 100, 0],
+  [CellType.DEBUG_LEFT_1]: [0, 0, 200],
+  [CellType.DEBUG_TOP_LEFT_0]: [0, 0, 100],
+  [CellType.DEBUG_TOP_LEFT_1]: [200, 0, 0],
+  [CellType.DEBUG_TOP_RIGHT_0]: [100, 0, 0],
+  [CellType.DEBUG_TOP_RIGHT_1]: [200, 0, 200],
   
   [CellType.OCEAN]: [37, 140, 219],
   [CellType.GRASS]: [29, 179, 39],
@@ -80,6 +106,19 @@ const cellTypeColor = {
   [CellType.RIVER_MOUTH]: [16, 108, 179],
   [CellType.RIVER_SOURCE]: [36, 128, 199],
 }
+
+const renderOrder: CellType[] = [
+  CellType.RIVER,
+  CellType.RIVER_MOUTH,
+  CellType.RIVER_SOURCE,
+  CellType.OCEAN,
+  CellType.GRASS,
+  CellType.BEACH,
+  CellType.FOREST,
+  CellType.ICE,
+  CellType.SAND,
+  CellType.TUNDRA,
+]
 
 const directionCellTypes = {
   [Direction.SE]: CellType.DEBUG_SE,
@@ -97,6 +136,15 @@ const cornerCellTypes = {
   [Corner.LEFT]: CellType.DEBUG_LEFT,
   [Corner.TOP_LEFT]: CellType.DEBUG_TOP_LEFT,
   [Corner.TOP_RIGHT]: CellType.DEBUG_TOP_RIGHT,
+}
+
+const cornerSideCellTypes = {
+  [Corner.RIGHT]: [CellType.DEBUG_RIGHT_0, CellType.DEBUG_RIGHT_1],
+  [Corner.BOTTOM_RIGHT]: [CellType.DEBUG_BOTTOM_RIGHT_0, CellType.DEBUG_BOTTOM_RIGHT_1],
+  [Corner.BOTTOM_LEFT]: [CellType.DEBUG_BOTTOM_LEFT_0, CellType.DEBUG_BOTTOM_LEFT_1],
+  [Corner.LEFT]: [CellType.DEBUG_LEFT_0, CellType.DEBUG_LEFT_1],
+  [Corner.TOP_LEFT]: [CellType.DEBUG_TOP_LEFT_0, CellType.DEBUG_TOP_LEFT_1],
+  [Corner.TOP_RIGHT]: [CellType.DEBUG_TOP_RIGHT_0, CellType.DEBUG_TOP_RIGHT_1],
 }
 
 const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
@@ -169,6 +217,24 @@ function drawHexTile(
       cornerCellTypes[corner],
       terrainPrimaryCellTypes[cornerTerrainType]
     );
+
+    for (let i = 0; i <= 1; i++) {
+      const dir = cornerDirections[corner][i];
+      let cornerSideTerrainType = hexTile.edgeTerrainTypes[dir] as TerrainType;
+      if (
+        // cornerTerrainType === TerrainType.RIVER || 
+        cornerTerrainType === TerrainType.RIVER_MOUTH || 
+        (terrainTransitions[hexTile.edgeTerrainTypes[dir]] &&
+          terrainTransitions[hexTile.edgeTerrainTypes[dir]].includes(cornerTerrainType))
+      ) {
+        cornerSideTerrainType = cornerTerrainType;
+      }
+      
+      cellTypeReplacements.set(
+        cornerSideCellTypes[corner][i],
+        terrainPrimaryCellTypes[cornerSideTerrainType],
+      );
+    }
   }
 
   // replace debug cell types with real cell types
@@ -204,59 +270,40 @@ function drawHexTile(
 
   // faster terrain transitions
 
-  for (let count = 0; count < 5; count++) {
-    if (cellTypePoints.has(CellType.RIVER_MOUTH)) {
-      const cellType = CellType.RIVER_MOUTH;
+  for (let count = 1; count <= 4; count++) {
+    for (const cellType of renderOrder) {
       const cells = cellTypePoints.get(cellType);
+      if (!cells) continue;
       let newCells: CoordArray;
-      if (count > 2) {
-        newCells = grid.expandNaturally(
-          cells,
-          value => value == CellType.DEBUG_CENTER,
-          cellType,
-        );
-      } else {
-        newCells = grid.expand(
-          cells,
-          value => value == CellType.DEBUG_CENTER,
-          cellType,
-        );
-      }
-      cellTypePoints.set(cellType, newCells);
-    }
-    for (const [cellType, cells] of cellTypePoints) {
-      if (cellType === CellType.RIVER_MOUTH) continue;
-      let newCells: CoordArray;
-      if (cellType === CellType.RIVER && count > 3) {
+      if (cellType === CellType.RIVER && count >= 3) {
         continue;
       }
-      if (count > 1) {
-        newCells = grid.expandNaturally(
-          cells,
-          value => value == CellType.DEBUG_CENTER,
-          cellType,
-          1,
-          cellType === CellType.RIVER ? 0.5 : 1,
-        );
-      } else {
-        newCells = grid.expand(
-          cells,
-          value => value == CellType.DEBUG_CENTER,
-          cellType,
-        );
-      }
+      newCells = grid.expandNaturally(
+        cells,
+        value => value == CellType.DEBUG_CENTER,
+        cellType,
+        1,
+        cellType === CellType.RIVER ? 0.85 : 0.60,
+      );
       grid.changeRule(
         CellType.DEBUG_CENTER,
         cellType,
-        4,
+        3,
         cellType,
       );
       cellTypePoints.set(cellType, newCells);
     }
   }
+  for (const cellType of renderOrder) {
+    grid.changeRule(
+      CellType.DEBUG_CENTER,
+      cellType,
+      4,
+      cellType,
+    );
+  }
 
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
-  // const centerCellType = CellType.DEBUG_N;
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
   // convert to image
@@ -357,7 +404,17 @@ export class WorldTileset {
           if (colorArrayMatches(color, thisColor)) {
             this.templateGrid.set(x, y, cellType);
           }
+
+          for (let i = 0; i <= 1; i++) {
+            const cellType = cornerSideCellTypes[corner][i];
+            const color = cellTypeColor[cellType];
+            if (colorArrayMatches(color, thisColor)) {
+              this.templateGrid.set(x, y, cellType);
+            }
+          }
         }
+
+        
       }
     }
     console.log('template grid', this.templateGrid);
