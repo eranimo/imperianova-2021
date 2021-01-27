@@ -19,6 +19,27 @@ export class TileGrid {
     }
   }
 
+  removeIslandNeighbors(
+    cells: CoordArray,
+    neighborCellType: CellType,
+    checkCellType: CellType,
+    toCellType: CellType,
+  ) {
+    for (const [x, y] of cells) {
+      for (let nx = -1; nx <= 1; nx++) {
+        for (let ny = -1; ny <= 1; ny++) {
+          if (nx === 0 && ny === 0) continue;
+          if (this.get(x + nx, y + ny) === neighborCellType) {
+            const neighborCount = this.countNeighborsOfType(x + nx, y + ny, checkCellType, false);
+            if (neighborCount >= 3) {
+              this.set(x + nx, y + ny, toCellType);
+            }
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Changes cells from one CellType to another, if the cell is of a target cell type
    * and if the number of neighbors of a given type is met.

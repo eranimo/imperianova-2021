@@ -1,5 +1,5 @@
 import ndarray from 'ndarray';
-import { CoordArray, Coord } from './types';
+import { CoordArray, Coord, ColorArray } from './types';
 
 
 export function octaveNoise(
@@ -106,7 +106,7 @@ export function floodFill(
   return fillStack;
 }
 
-export function colorToNumber(color) {
+export function colorToNumber(color: ColorArray) {
   return (color[0] << 16) + (color[1] << 8) + (color[2]);
 }
 
@@ -152,4 +152,12 @@ export function logGroupTime(label: string, closed: boolean = false) {
       return result;
     }
   }
+}
+
+export function colorArrayMatches(color1: ColorArray, color2: ColorArray) {
+  return (
+    color1[0] === color2[0] &&
+    color1[1] === color2[1] &&
+    color1[2] === color2[2]
+  )
 }

@@ -41,20 +41,6 @@ export const terrainColors: TerrainTypeMap<number> = {
   [TerrainType.RIVER_SOURCE]: 0x3F78CB,
 };
 
-export const terrainMinimapColors: TerrainTypeMap<string> = {
-  [TerrainType.MAP_EDGE]: '#000000',
-  [TerrainType.OCEAN]: '#3F78CB',
-  [TerrainType.GRASSLAND]: '#81B446',
-  [TerrainType.FOREST]: '#236e29',
-  [TerrainType.DESERT]: '#D9BF8C',
-  [TerrainType.TAIGA]: '#006259',
-  [TerrainType.TUNDRA]: '#96D1C3',
-  [TerrainType.GLACIAL]: '#FAFAFA',
-  [TerrainType.RIVER]: '#3F78CB',
-  [TerrainType.RIVER_MOUTH]: '#3F78CB',
-  [TerrainType.RIVER_SOURCE]: '#3F78CB',
-};
-
 export const terrainTypeTitles: TerrainTypeMap<string> = {
   [TerrainType.MAP_EDGE]: 'MAP EDGE',
   [TerrainType.OCEAN]: 'Ocean',

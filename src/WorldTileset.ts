@@ -1,10 +1,12 @@
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
 import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner, Coord, Assets, cornerIndexOrder, ColorArray } from './types';
-import { bresenhamLinePlot } from './utils';
+import { bresenhamLinePlot, colorArrayMatches } from './utils';
 import { EdgeFeature, HexFeature, TerrainType, terrainTransitions, CornerFeature, TerrainTypeMap } from './World';
 import { MultiDictionary } from 'typescript-collections';
 import ndarray from 'ndarray';
+import PoissonDiskSampling from 'poisson-disk-sampling';
+
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -54,6 +56,8 @@ export enum CellType {
   RIVER,
   RIVER_MOUTH,
   RIVER_SOURCE,
+
+  TREE,
 };
 
 
@@ -102,9 +106,12 @@ const cellTypeColor = {
   [CellType.ICE]: [250, 250, 250],
   [CellType.SAND]: [217, 191, 140],
   [CellType.TUNDRA]: [150, 209, 195],
+
   [CellType.RIVER]: [26, 118, 189],
   [CellType.RIVER_MOUTH]: [16, 108, 179],
   [CellType.RIVER_SOURCE]: [36, 128, 199],
+
+  [CellType.TREE]: [7, 59, 21],
 }
 
 const renderOrder: CellType[] = [
@@ -193,8 +200,8 @@ function drawHexTile(
   templateGrid: ndarray,
 ): PIXI.Texture {
   const grid = new TileGrid(hexTile, width, height);
-  let cleanupCellTypes: Set<CellType> = new Set();
   let cellTypePoints = new Map();
+
   // replace template grid with correct cell types
   for (let x = 0; x < width; x++) {
     for (let y = 0; y < height; y++) {
@@ -285,24 +292,21 @@ function drawHexTile(
         1,
         cellType === CellType.RIVER ? 0.85 : 0.60,
       );
-      grid.changeRule(
+      grid.removeIslandNeighbors(
+        cells,
         CellType.DEBUG_CENTER,
         cellType,
-        3,
         cellType,
+      );
+      grid.removeIslandNeighbors(
+        cells,
+        cellType,
+        CellType.DEBUG_CENTER,
+        CellType.DEBUG_CENTER,
       );
       cellTypePoints.set(cellType, newCells);
     }
   }
-  for (const cellType of renderOrder) {
-    grid.changeRule(
-      CellType.DEBUG_CENTER,
-      cellType,
-      4,
-      cellType,
-    );
-  }
-
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
@@ -331,14 +335,6 @@ function drawHexTile(
   }
 
   return PIXI.Texture.fromBuffer(buffer, width, height);
-}
-
-function colorArrayMatches(color1: ColorArray, color2: ColorArray) {
-  return (
-    color1[0] === color2[0] &&
-    color1[1] === color2[1] &&
-    color1[2] === color2[2]
-  )
 }
 
 export class WorldTileset {
