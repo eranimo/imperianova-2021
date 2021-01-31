@@ -1,0 +1,1 @@
+svgpack ./icons/*.svg -d icons-packed
