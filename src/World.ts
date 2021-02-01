@@ -6,7 +6,7 @@ import { octaveNoise, logGroupTime } from './utils';
 import SimplexNoise from 'simplex-noise';
 import Alea from 'alea';
 import { clamp } from 'lodash';
-import { MultiDictionary } from 'typescript-collections';
+import { MultiDictionary, Queue } from 'typescript-collections';
 import { Subject } from 'rxjs';
 
 
@@ -117,8 +117,10 @@ export class World {
   terrainUpdates$: Subject<unknown>;
 
   rivers: Edge[][];
+  hexNeighborDirections: Map<Hex, Map<Hex, Direction>>;
   hexRiverEdges: MultiDictionary<Hex, Direction>;
   hexRiverPoints: MultiDictionary<Hex, [Honeycomb.Point, Honeycomb.Point]>;
+  hexRoads: Map<Hex, Partial<DirectionMap<Hex>>>;
   riverHexPairs: Map<Hex, Set<Hex>>;
 
   constructor() {
@@ -146,11 +148,22 @@ export class World {
     const heightBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
     this.heightmap = ndarray(new Float32Array(heightBuffer), arrayDim);
 
+    this.hexNeighborDirections = new Map();
+    this.hexRoads = new Map();
+
     this.hexgrid.forEach((hex, index) => {
       hex.index = index;
       const point = hex.toPoint();
       this.pointsMap.set(`${hex.x},${hex.y}`, [point.x, point.y]);
       this.indexMap.set(`${hex.x},${hex.y}`, index);
+
+      // calculate neighbor map
+      const neighborMap = new Map();
+      for (const direction of directionIndexOrder) {
+        const neighborHex = this.getHexNeighbor(hex.x, hex.y, direction);
+        neighborMap.set(neighborHex, direction);
+      }
+      this.hexNeighborDirections.set(hex, neighborMap);
     });
   }
 
@@ -165,7 +178,6 @@ export class World {
 
   getHex(x: number, y: number) {
     return this.hexgrid[this.indexMap.get(`${x},${y}`)] || null;
-    // return this.hexgrid.get({ x, y });
   }
 
   getHexFromPoint(point: PIXI.Point) {
@@ -205,6 +217,56 @@ export class World {
     }
   }
 
+  *hexNeighbors(hex: Hex) {
+    const { x, y } = hex;
+    const se_hex = this.getHexNeighbor(x, y, Direction.SE);
+    if (se_hex !== null) {
+      yield se_hex;
+    }
+    const ne_hex = this.getHexNeighbor(x, y, Direction.NE);
+    if (ne_hex !== null) {
+      yield ne_hex;
+    }
+    const n_hex = this.getHexNeighbor(x, y, Direction.N);
+    if (n_hex !== null) {
+      yield n_hex;
+    }
+    const nw_hex = this.getHexNeighbor(x, y, Direction.NW);
+    if (nw_hex !== null) {
+      yield nw_hex;
+    }
+    const sw_hex = this.getHexNeighbor(x, y, Direction.SW);
+    if (sw_hex !== null) {
+      yield sw_hex;
+    }
+    const s_hex = this.getHexNeighbor(x, y, Direction.S);
+    if (s_hex !== null) {
+      yield s_hex;
+    }
+  }
+
+  floodFill(
+    firstHex: Hex,
+    isConnected: (h1: Hex, h2: Hex) => boolean,
+    visited: Set<Hex> = new Set(), 
+  ) {
+    const q = new Queue<Hex>();
+    q.enqueue(firstHex);
+    visited.add(firstHex);
+    const region = new Set<Hex>();
+    while (q.size() > 0) {
+      const hex = q.dequeue();
+      region.add(hex);
+      for (const h of this.hexNeighbors(hex)) {
+        if (visited.has(h) === false && isConnected(hex, h)) {
+          q.enqueue(h);
+          visited.add(h);
+        }
+      }
+    }
+    return region;
+  }
+
   getHexNeighbor(x: number, y: number, direction: Direction) {
     const coord = this.getHexNeighborCoord(x, y, direction);
     return this.getHex(coord[0], coord[1]);
@@ -215,6 +277,10 @@ export class World {
     const dir = oddq_directions[parity][direction];
     const coord = [x + dir[0], y + dir[1]];
     return coord;
+  }
+
+  getTerrain(hex: Hex) {
+    return this.getTerrainForCoord(hex.x, hex.y);
   }
 
   getTerrainForCoord(x: number, y: number): TerrainType {
@@ -258,6 +324,53 @@ export class World {
       [Direction.SW]: sw_hex_terrain,
       [Direction.S]: s_hex_terrain,
     }
+  }
+
+  /**
+   * Returns true if both hexes are neighbors
+   * @param hex1 First Hex
+   * @param hex2 Second Hex
+   */
+  areHexesNeighbors(hex1: Hex, hex2: Hex): boolean {
+    return this.hexNeighborDirections.get(hex1).has(hex2);
+  }
+
+  /**
+   * Set a road on hex1 pointing to neighbor hex2
+   * @param hex1 First hex
+   * @param hex2 Neighbor hex
+   * @returns true if road created, false if invalid
+   */
+  setHexRoad(hex1: Hex, hex2: Hex): boolean {
+    if (!this.areHexesNeighbors(hex1, hex2)) {
+      return false;
+    }
+    const direction = this.hexNeighborDirections.get(hex1).get(hex2);
+    if (this.hexRoads.has(hex1)) {
+      this.hexRoads.get(hex1)[direction] = hex2;
+    } else {
+      this.hexRoads.set(hex1, {
+        [direction]: hex2,
+      });
+    }
+  }
+
+  isLand(hex: Hex) {
+    return this.getTerrainForCoord(hex.x, hex.y) !== TerrainType.OCEAN;
+  }
+
+  /**
+   * Remove road between two neighboring hexes
+   * @param hex1 Hex with road
+   * @param hex2 Neighbor hex
+   * @returns true if road deleted
+   */
+  removeHexRoad(hex1: Hex, hex2: Hex) {
+    if (!this.areHexesNeighbors(hex1, hex2)) {
+      return false;
+    }
+
+    return this.hexNeighborDirections.get(hex1).delete(hex2);
   }
 
   debugNeighborTerrain(x: number, y: number) {

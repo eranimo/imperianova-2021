@@ -38,6 +38,8 @@
     "honeycomb-grid": "^3.1.7",
     "lodash": "^4.17.20",
     "ndarray": "^1.0.19",
+    "ngraph.graph": "^19.1.0",
+    "ngraph.path": "^1.3.1",
     "pixi-filters": "^3.2.2",
     "pixi-tilemap": "^2.1.4",
     "pixi-viewport": "^4.18.1",

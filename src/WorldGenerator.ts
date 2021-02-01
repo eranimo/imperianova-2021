@@ -1,12 +1,13 @@
 import Alea from 'alea';
 import * as Honeycomb from 'honeycomb-grid';
+import { orderBy } from 'lodash';
 import ndarray from 'ndarray';
 import { Subject } from 'rxjs';
 import SimplexNoise from 'simplex-noise';
-import { MultiDictionary } from 'typescript-collections';
+import { MultiDictionary, Queue } from 'typescript-collections';
 import { adjacentDirections, Direction, directionIndexOrder, DirectionMap, oppositeDirections, Size } from './types';
 import { logGroupTime, octaveNoise } from './utils';
-import { Edge, Hex, World, GridFactory, TerrainType } from './World';
+import { Edge, Hex, World, GridFactory, TerrainType, terrainTypeTitles } from './World';
 
 
 export type WorldGeneratorOptions = {
@@ -96,6 +97,57 @@ export class WorldGenerator {
         }
       }
     });
+
+    // identify landmasses
+    console.time('identify landmasses');
+    const landmasses = [];
+    let visited = new Set<Hex>();
+    this.world.hexgrid.forEach(hex => {
+      if (!visited.has(hex)) {
+        const region = this.world.floodFill(
+          hex,
+          (h1, h2) => {
+            if (this.world.getTerrain(h1) === TerrainType.OCEAN) {
+              return this.world.getTerrain(h2) === TerrainType.OCEAN;
+            } else {
+              return this.world.getTerrain(h2) !== TerrainType.OCEAN;
+            }
+          },
+          visited,
+        );
+        const hexes = Array.from(region);
+        landmasses.push({
+          size: region.size,
+          hexes,
+        });
+      }
+    });
+    console.log('landmasses:', orderBy(landmasses, 'size', 'desc'));
+    console.timeEnd('identify landmasses');
+
+    // identify landmasses
+    console.time('identify ecoregions');
+    const ecoregions = [];
+    visited = new Set<Hex>();
+    this.world.hexgrid.forEach(hex => {
+      if (!visited.has(hex)) {
+        const region = this.world.floodFill(
+          hex,
+          (h1, h2) => this.world.getTerrain(h1) === this.world.getTerrain(h2),
+          visited,
+        );
+        const hexes = Array.from(region);
+        const terrainType = this.world.getTerrain(hexes[0]);
+        ecoregions.push({
+          size: region.size,
+          hexes,
+          terrainType,
+          terrainTypeTitle: terrainTypeTitles[terrainType],
+        });
+      }
+    });
+    console.log('ecoregions:', orderBy(ecoregions, 'size', 'desc'));
+    console.timeEnd('identify ecoregions');
   }
 
   @logGroupTime('generateRivers')

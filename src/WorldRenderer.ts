@@ -8,6 +8,9 @@ import { WorldTileset } from './WorldTileset';
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
 
+const DEBUG_RIVER_COLOR = 0x0000FF;
+const DEBUG_ROAD_COLOR = 0x80530b;
+
 export class WorldRenderer {
   public world: World;
   public debugGraphics: PIXI.Graphics;
@@ -240,20 +243,36 @@ export class WorldRenderer {
       otherCorners.forEach(({ x, y }) => this.debugGraphics.lineTo(x, y))
       this.debugGraphics.lineTo(firstCorner.x, firstCorner.y)
 
-      // draw terrain type indicator
+      // rivers
+      if (this.world.hexRiverEdges.containsKey(hex)) {
+        this.debugGraphics.lineStyle(5, DEBUG_RIVER_COLOR);
+        for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
+          this.debugGraphics.moveTo(p1.x, p1.y);
+          this.debugGraphics.lineTo(p2.x, p2.y);
+        }
+      }
+
+      // roads
+      if (this.world.hexRoads.has(hex)) {
+        this.debugGraphics.lineStyle(3, DEBUG_ROAD_COLOR);
+        for (const direction of directionIndexOrder) {
+          if (this.world.hexRoads.get(hex)[direction]) {
+            const [c1, c2] = directionCorners[direction];
+            const x = (corners[c1].x + corners[c2].x) / 2;
+            const y = (corners[c1].y + corners[c2].y) / 2;
+            this.debugGraphics.moveTo(center.x, center.y);
+            this.debugGraphics.lineTo(x, y);
+          }
+        }
+      }
+
+      // terrain type indicator
+      this.debugGraphics.lineStyle(1, 0xFFFFFF);
       const color = terrainColors[this.world.terrain.get(hex.x, hex.y)];
       if (color) {
         this.debugGraphics.beginFill(color);
         this.debugGraphics.drawCircle(center.x, center.y, 5);
         this.debugGraphics.endFill();
-      }
-
-      if (this.world.hexRiverEdges.containsKey(hex)) {
-        this.debugGraphics.lineStyle(5, 0x0000FF);
-        for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
-          this.debugGraphics.moveTo(p1.x, p1.y);
-          this.debugGraphics.lineTo(p2.x, p2.y);
-        }
       }
     });
   }
