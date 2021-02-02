@@ -1,9 +1,8 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { Direction, DirectionMap, CornerMap, directionShort, adjacentDirections, directionCorners, directionIndexOrder, Corner, cornerIndexOrder, cornerDirections, Assets } from './types';
-import { colorToNumber } from './utils';
-import { EdgeFeature, HexFeature, TerrainType, World, terrainColors, CornerFeature, terrainTransitions } from './World';
-import { WorldTileset } from './WorldTileset';
+import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
+import { Hex, terrainColors, terrainTransitions, TerrainType, World } from './World';
+import { WorldTileset, HexTile } from './WorldTileset';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -22,6 +21,7 @@ export class WorldRenderer {
   chunkHexes: Map<string, { x: number, y: number }[]>;
   worldTileset: WorldTileset;
   chunksLayer: PIXI.Container;
+  hexTiles: Map<Hex, HexTile>;
 
   constructor(private app: PIXI.Application, world: World, assets: Assets) {
     this.world = world;
@@ -31,6 +31,8 @@ export class WorldRenderer {
     this.chunksLayer = new PIXI.Container();
     this.worldTileset = new WorldTileset(this.app.renderer, assets);
     console.log(this.worldTileset);
+
+    this.hexTiles = new Map();
     
     this.chunkTileLayers = new Map();
     this.hexChunk = new Map();
@@ -183,12 +185,18 @@ export class WorldRenderer {
         }
       }
 
-      const hexTileID = this.worldTileset.getTile({
+      let edgeRoads: Partial<DirectionMap<boolean>> = {};
+      for (const direction of directionIndexOrder) {
+        edgeRoads[direction] = this.world.hasRoad(hexObj, direction);
+      }
+
+      const hexTile = {
         terrainType,
         edgeTerrainTypes,
         cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
-        hexFeature: HexFeature.NONE,
-      });
+        edgeRoads: edgeRoads as DirectionMap<boolean>,
+      };
+      const hexTileID = this.worldTileset.getTile(hexTile);
       const texture = this.worldTileset.getTextureForID(hexTileID);
       const [ x, y ] = hexPosititions[index];
       if (texture) {
@@ -198,6 +206,7 @@ export class WorldRenderer {
           (y - minY),
         );
       }
+      this.hexTiles.set(hexObj, hexTile);
     });
   }
 
@@ -256,7 +265,7 @@ export class WorldRenderer {
       if (this.world.hexRoads.has(hex)) {
         this.debugGraphics.lineStyle(3, DEBUG_ROAD_COLOR);
         for (const direction of directionIndexOrder) {
-          if (this.world.hexRoads.get(hex)[direction]) {
+          if (this.world.hexRoads.get(hex).get(direction)) {
             const [c1, c2] = directionCorners[direction];
             const x = (corners[c1].x + corners[c2].x) / 2;
             const y = (corners[c1].y + corners[c2].y) / 2;

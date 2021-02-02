@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { World } from './World';
+import { World, GridFactory } from './World';
 import { Assets } from './types';
 import { Viewport } from 'pixi-viewport';
 import { WorldGenerator } from './WorldGenerator';
 import { WorldRenderer } from './WorldRenderer';
 import { WorldMinimap } from './WorldMinimap';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { Grid } from 'honeycomb-grid';
 
 export const WorldViewer = ({
   world,
@@ -74,6 +75,23 @@ export const WorldViewer = ({
         viewport.moveCenter(point);
         viewport$.next(viewport);
       });
+
+      viewport.on('clicked', (event) => {
+        const hexPosition = GridFactory.pointToHex(event.world);
+        const hex = world.getHex(hexPosition.x, hexPosition.y);
+        console.log('clicked on hex', hex);
+        console.log({
+          hexRoads: world.hexRoads.get(hex),
+          hexRivers: world.riverHexPairs.get(hex),
+          hexTile: renderer.hexTiles.get(hex),
+        });
+      });
+
+      (window as any).moveToHex = (x: number, y: number) => {
+        const hex = world.hexgrid.get({ x, y });
+        const point = hex.toPoint();
+        viewport.moveCenter(new PIXI.Point(point.x, point.y));
+      }
       console.log({ app, viewport, world, renderer });
     });
   }, [world]);

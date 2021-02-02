@@ -1,23 +1,32 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { TerrainType, World } from './World';
-import { WorldGenerator } from './WorldGenerator';
+import { WorldGenerator, WorldGeneratorOptions } from './WorldGenerator';
 import { WorldViewer } from './WorldViewer';
 import { Direction } from './types';
 import { WorldGrid } from './WorldGrid';
+import Alea from 'alea';
+import { random, times } from 'lodash';
+
+const options: WorldGeneratorOptions = {
+  size: 75,
+  sealevel: 100,
+  seed: 123,
+};
 
 function testRoads(world: World, worldGrid: WorldGrid) {
-  const roadHeads = [];
-  world.hexgrid.forEach(hex => {
-    if (Math.random() < 0.02 && world.isLand(hex) && Math.abs(world.getHexCoordinate(hex).lat) < 60) {
-      roadHeads.push(hex);
+  const rng = Alea(options.seed);
+  console.groupCollapsed('test roads');
+  for (const landmass of world.landmasses) {
+    if (landmass.size > 1) {
+      const from = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
+      times(random(10)).forEach(() => {
+        const to = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
+        const path = worldGrid.findPath(from, to);
+        world.setRoadPath(path);
+      });
     }
-  });
-  console.log(`Generating ${roadHeads.length} roads`);
-
-  for (const head of roadHeads) {
-    world.setHexRoad(head, world.getHexNeighbor(head.x, head.y, Direction.N));
-    
   }
+  console.groupEnd();
 }
 
 export const App = () => {
@@ -26,11 +35,7 @@ export const App = () => {
 
   useEffect(() => {
     const world = new World();
-    const worldGen = new WorldGenerator(world, {
-      size: 75,
-      sealevel: 100,
-      seed: 123,
-    });
+    const worldGen = new WorldGenerator(world, options);
     setLoading(true);
     worldGen.generate();
     console.log('world', world);

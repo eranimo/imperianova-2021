@@ -4,6 +4,7 @@ export type Size = {
 }
 
 export type Coord = [x: number, y: number];
+export type Line = [p1: Coord, p2: Coord];
 export type CoordArray = Coord[];
 
 export type Assets = {

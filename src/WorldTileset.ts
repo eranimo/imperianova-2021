@@ -1,18 +1,16 @@
+import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
-import { Direction, directionIndexOrder, DirectionMap, CoordArray, CornerMap, directionCorners, cornerDirections, Corner, Coord, Assets, cornerIndexOrder, ColorArray } from './types';
-import { bresenhamLinePlot, colorArrayMatches } from './utils';
-import { EdgeFeature, HexFeature, TerrainType, terrainTransitions, CornerFeature, TerrainTypeMap } from './World';
-import { MultiDictionary } from 'typescript-collections';
-import ndarray from 'ndarray';
-import PoissonDiskSampling from 'poisson-disk-sampling';
+import { Assets, ColorArray, CoordArray, Corner, cornerDirections, cornerIndexOrder, CornerMap, Direction, directionIndexOrder, DirectionMap, directionCorners, Coord, adjacentDirections } from './types';
+import { colorArrayMatches, midpointPoints, midpoint, rotatePoint } from './utils';
+import { terrainTransitions, TerrainType } from './World';
 
 
 export type HexTile = {
   terrainType: TerrainType,
   edgeTerrainTypes: DirectionMap<TerrainType | null>,
   cornerTerrainTypes: CornerMap<TerrainType | null>,
-  hexFeature: HexFeature,
+  edgeRoads: DirectionMap<boolean | null>;
 }
 
 export enum CellType {
@@ -58,6 +56,7 @@ export enum CellType {
   RIVER_SOURCE,
 
   TREE,
+  ROAD,
 };
 
 
@@ -112,6 +111,7 @@ const cellTypeColor = {
   [CellType.RIVER_SOURCE]: [36, 128, 199],
 
   [CellType.TREE]: [7, 59, 21],
+  [CellType.ROAD]: [128, 83, 11],
 }
 
 const renderOrder: CellType[] = [
@@ -188,10 +188,26 @@ function getHexTileID(hexTile: HexTile) {
     (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_LEFT)) * hexTile.cornerTerrainTypes[Corner.TOP_LEFT]) +
     (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_RIGHT)) * hexTile.cornerTerrainTypes[Corner.TOP_RIGHT]) +
 
-    // hex features
-    ((HexFeature.__LENGTH ** 13) * hexTile.hexFeature)
+    // hex edge features
+    ((2 ** (13 + Direction.SE)) * Number(hexTile.edgeRoads[Direction.SE])) +
+    ((2 ** (13 + Direction.NE)) * Number(hexTile.edgeRoads[Direction.NE])) +
+    ((2 ** (13 + Direction.N)) * Number(hexTile.edgeRoads[Direction.N])) +
+    ((2 ** (13 + Direction.NW)) * Number(hexTile.edgeRoads[Direction.NW])) +
+    ((2 ** (13 + Direction.SW)) * Number(hexTile.edgeRoads[Direction.SW])) +
+    ((2 ** (13 + Direction.S)) * Number(hexTile.edgeRoads[Direction.S]))
   );
 }
+
+const edgeCenterPoints: DirectionMap<Coord> = {
+  [Direction.SE]: [56, 44],
+  [Direction.NE]: [56, 15],
+  [Direction.N]: [31, 0],
+  [Direction.NW]: [7, 15],
+  [Direction.SW]: [7, 44],
+  [Direction.S]: [31, 59],
+};
+
+const centerPoint: Coord = [32, 32];
 
 function drawHexTile(
   hexTile: HexTile,
@@ -275,8 +291,7 @@ function drawHexTile(
     value => value === 0,
   );
 
-  // faster terrain transitions
-
+  // terrain transitions
   for (let count = 1; count <= 4; count++) {
     for (const cellType of renderOrder) {
       const cells = cellTypePoints.get(cellType);
@@ -307,6 +322,65 @@ function drawHexTile(
       cellTypePoints.set(cellType, newCells);
     }
   }
+
+  // roads
+  let roadCenter = centerPoint;
+  let roadPoints: CoordArray = [];
+  for (const direction of directionIndexOrder) {
+    if (hexTile.edgeRoads[direction]) {
+      roadPoints.push(edgeCenterPoints[direction]);
+    }
+  }
+  if (roadPoints.length > 1) {
+    roadCenter = midpointPoints(roadPoints);
+  }
+
+  const randomizePoint = (point: Coord, range: number): Coord => {
+    return [
+      point[0] + (Math.round((Math.random() - 0.5) * 5)),
+      point[1] + (Math.round((Math.random() - 0.5) * 5)),
+    ];
+  }
+  roadCenter = randomizePoint(roadCenter, 5);
+
+  let roadCells = [];
+  for (const direction of directionIndexOrder) {
+    if (hexTile.edgeRoads[direction]) {
+      const [x, y] = edgeCenterPoints[direction];
+      const center = randomizePoint(midpoint(roadCenter, [x, y]), 5);
+      const c1 = rotatePoint(
+        center,
+        roadCenter,
+        90,
+      );
+      const c2 = rotatePoint(
+        center,
+        roadCenter,
+        -90,
+      );
+      const cells = grid.getNoisyLine(
+        roadCenter,
+        [x, y],
+        c1,
+        c2,
+        CellType.ROAD,
+        3,
+        0.30
+      );
+      for (const [cx, cy] of cells) {
+        grid.set(cx, cy, CellType.ROAD);
+        roadCells.push([cx, cy]);
+      }
+    }
+  }
+  grid.expand(
+    roadCells,
+    value => value !== CellType.NONE,
+    CellType.ROAD,
+    1,
+  )
+
+
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 

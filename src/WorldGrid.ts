@@ -5,6 +5,7 @@ import { Direction, directionIndexOrder } from './types';
 
 type HexLink = {
   direction: Direction,
+  weight?: number,
 }
 
 export class WorldGrid {
@@ -17,6 +18,9 @@ export class WorldGrid {
     this.graph = createGraph();
     this.pathFinder = path.aStar(this.graph, {
       distance(fromNode, toNode, link) {
+        if (link.data.weight > 0) {
+          return link.data.weight;
+        }
         return fromNode.data.distance(toNode.data);
       },
       heuristic(fromNode, toNode) {
@@ -35,7 +39,15 @@ export class WorldGrid {
       for (const direction of directionIndexOrder) {
         const neighborHex = neighbors[direction] as Hex;
         if (neighborHex !== null) {
+          let weight;
+          if (
+            (this.world.isLand(hex) && !this.world.isLand(neighborHex)) ||
+            (!this.world.isLand(hex) && this.world.isLand(neighborHex))
+          ) {
+            weight = Number.POSITIVE_INFINITY;
+          }
           this.graph.addLink(hex.index, neighborHex.index, {
+            weight,
             direction: direction,
           });
         }

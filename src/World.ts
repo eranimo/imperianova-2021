@@ -2,9 +2,6 @@ import * as PIXI from 'pixi.js';
 import { Size, Direction, oddq_directions, oppositeDirections, directionIndexOrder, adjacentDirections, DirectionMap, directionTitles } from './types';
 import ndarray from 'ndarray';
 import * as Honeycomb from 'honeycomb-grid';
-import { octaveNoise, logGroupTime } from './utils';
-import SimplexNoise from 'simplex-noise';
-import Alea from 'alea';
 import { clamp } from 'lodash';
 import { MultiDictionary, Queue } from 'typescript-collections';
 import { Subject } from 'rxjs';
@@ -63,24 +60,6 @@ export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
   [TerrainType.TAIGA]: [TerrainType.GRASSLAND, TerrainType.GLACIAL],
 };
 
-export enum EdgeFeature {
-  NONE = 0,
-  RIVER = 1,
-  __LENGTH
-}
-
-export enum CornerFeature {
-  NONE = 0,
-  RIVER = 1,
-  __LENGTH
-}
-
-export enum HexFeature {
-  NONE = 0,
-  ROAD = 1,
-  __LENGTH
-}
-
 export type Hex = Honeycomb.Hex<IHex>; 
 export const HexFactory = Honeycomb.extendHex<IHex>({
   size: { xRadius: 32.663, yRadius: 34.641 },
@@ -106,6 +85,19 @@ export type Edge = {
   height?: number;
 }
 
+export type Landmass = {
+  id: number,
+  size: number,
+  hexes: Hex[],
+}
+
+export type Ecoregion = {
+  id: number,
+  size: number,
+  hexes: Hex[],
+  terrainType: TerrainType,
+}
+
 export class World {
   public gridSize: Size;
   public hexgrid: Honeycomb.Grid<Hex>;
@@ -120,8 +112,10 @@ export class World {
   hexNeighborDirections: Map<Hex, Map<Hex, Direction>>;
   hexRiverEdges: MultiDictionary<Hex, Direction>;
   hexRiverPoints: MultiDictionary<Hex, [Honeycomb.Point, Honeycomb.Point]>;
-  hexRoads: Map<Hex, Partial<DirectionMap<Hex>>>;
+  hexRoads: Map<Hex, Map<Direction, Hex>>;
   riverHexPairs: Map<Hex, Set<Hex>>;
+  landmasses: Landmass[];
+  ecoregions: Ecoregion[];
 
   constructor() {
     this.indexMap = new Map();
@@ -156,7 +150,9 @@ export class World {
       const point = hex.toPoint();
       this.pointsMap.set(`${hex.x},${hex.y}`, [point.x, point.y]);
       this.indexMap.set(`${hex.x},${hex.y}`, index);
+    });
 
+    this.hexgrid.forEach((hex, index) => {
       // calculate neighbor map
       const neighborMap = new Map();
       for (const direction of directionIndexOrder) {
@@ -335,42 +331,41 @@ export class World {
     return this.hexNeighborDirections.get(hex1).has(hex2);
   }
 
-  /**
-   * Set a road on hex1 pointing to neighbor hex2
-   * @param hex1 First hex
-   * @param hex2 Neighbor hex
-   * @returns true if road created, false if invalid
-   */
-  setHexRoad(hex1: Hex, hex2: Hex): boolean {
-    if (!this.areHexesNeighbors(hex1, hex2)) {
-      return false;
+  setHexRoad(node: Hex, otherNode: Hex, direction: Direction) {
+    if (!this.hexRoads.has(node)) {
+      this.hexRoads.set(node, new Map());
     }
-    const direction = this.hexNeighborDirections.get(hex1).get(hex2);
-    if (this.hexRoads.has(hex1)) {
-      this.hexRoads.get(hex1)[direction] = hex2;
-    } else {
-      this.hexRoads.set(hex1, {
-        [direction]: hex2,
-      });
+    this.hexRoads.get(node).set(direction, otherNode);
+  }
+
+  setRoadPath(path: Hex[]) {
+    path.forEach((node, index) => {
+      const lastNode = path[index - 1];
+      const nextNode = path[index + 1];
+      if (lastNode) {
+        const direction = this.hexNeighborDirections.get(node).get(lastNode);
+        this.setHexRoad(node, lastNode, direction);
+      }
+
+      if (nextNode) {
+        const direction = this.hexNeighborDirections.get(node).get(nextNode);
+        this.setHexRoad(node, nextNode, direction);
+      }
+    });
+  }
+
+  hasRoad(hex: Hex, direction?: Direction) {
+    if (this.hexRoads.has(hex)) {
+      if (direction === undefined) {
+        return true;
+      }
+      return this.hexRoads.get(hex).has(direction);
     }
+    return false;
   }
 
   isLand(hex: Hex) {
     return this.getTerrainForCoord(hex.x, hex.y) !== TerrainType.OCEAN;
-  }
-
-  /**
-   * Remove road between two neighboring hexes
-   * @param hex1 Hex with road
-   * @param hex2 Neighbor hex
-   * @returns true if road deleted
-   */
-  removeHexRoad(hex1: Hex, hex2: Hex) {
-    if (!this.areHexesNeighbors(hex1, hex2)) {
-      return false;
-    }
-
-    return this.hexNeighborDirections.get(hex1).delete(hex2);
   }
 
   debugNeighborTerrain(x: number, y: number) {

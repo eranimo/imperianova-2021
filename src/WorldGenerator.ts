@@ -100,34 +100,29 @@ export class WorldGenerator {
 
     // identify landmasses
     console.time('identify landmasses');
-    const landmasses = [];
+    this.world.landmasses = [];
     let visited = new Set<Hex>();
     this.world.hexgrid.forEach(hex => {
-      if (!visited.has(hex)) {
+      if (this.world.getTerrain(hex) !== TerrainType.OCEAN && !visited.has(hex)) {
         const region = this.world.floodFill(
           hex,
-          (h1, h2) => {
-            if (this.world.getTerrain(h1) === TerrainType.OCEAN) {
-              return this.world.getTerrain(h2) === TerrainType.OCEAN;
-            } else {
-              return this.world.getTerrain(h2) !== TerrainType.OCEAN;
-            }
-          },
+          (h1, h2) => this.world.getTerrain(h2) !== TerrainType.OCEAN,
           visited,
         );
         const hexes = Array.from(region);
-        landmasses.push({
+        this.world.landmasses.push({
+          id: this.world.landmasses.length,
           size: region.size,
           hexes,
         });
       }
     });
-    console.log('landmasses:', orderBy(landmasses, 'size', 'desc'));
+    console.log('landmasses:', orderBy(this.world.landmasses, 'size', 'desc'));
     console.timeEnd('identify landmasses');
 
     // identify landmasses
     console.time('identify ecoregions');
-    const ecoregions = [];
+    this.world.ecoregions = [];
     visited = new Set<Hex>();
     this.world.hexgrid.forEach(hex => {
       if (!visited.has(hex)) {
@@ -138,15 +133,15 @@ export class WorldGenerator {
         );
         const hexes = Array.from(region);
         const terrainType = this.world.getTerrain(hexes[0]);
-        ecoregions.push({
+        this.world.ecoregions.push({
+          id: this.world.ecoregions.length,
           size: region.size,
           hexes,
           terrainType,
-          terrainTypeTitle: terrainTypeTitles[terrainType],
         });
       }
     });
-    console.log('ecoregions:', orderBy(ecoregions, 'size', 'desc'));
+    console.log('ecoregions:', orderBy(this.world.ecoregions, 'size', 'desc'));
     console.timeEnd('identify ecoregions');
   }
 
