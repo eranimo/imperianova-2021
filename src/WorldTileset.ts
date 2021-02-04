@@ -199,16 +199,17 @@ function getHexTileID(hexTile: HexTile) {
   );
 }
 
+export const OFFSET_Y = 10;
+
 const edgeCenterPoints: DirectionMap<Coord> = {
-  [Direction.SE]: [56, 44],
-  [Direction.NE]: [56, 15],
-  [Direction.N]: [31, 0],
-  [Direction.NW]: [7, 15],
-  [Direction.SW]: [7, 44],
-  [Direction.S]: [31, 59],
+  [Direction.SE]: [56, 44 + OFFSET_Y],
+  [Direction.NE]: [56, 15 + OFFSET_Y],
+  [Direction.N]: [31, 0 + OFFSET_Y],
+  [Direction.NW]: [7, 15 + OFFSET_Y],
+  [Direction.SW]: [7, 44 + OFFSET_Y],
+  [Direction.S]: [31, 59 + OFFSET_Y],
 };
 
-export const OFFSET_Y = 10;
 
 function placeObject(
   autogenLayer: ndarray,
