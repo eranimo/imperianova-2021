@@ -19,7 +19,7 @@ function testRoads(world: World, worldGrid: WorldGrid) {
   for (const landmass of world.landmasses) {
     if (landmass.size > 1) {
       const from = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
-      times(random(10)).forEach(() => {
+      times(Math.round(rng() * 10)).forEach(() => {
         const to = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
         const path = worldGrid.findPath(from, to);
         world.setRoadPath(path);

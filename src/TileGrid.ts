@@ -96,6 +96,7 @@ export class TileGrid {
     }
   }
 
+  // from https://www.redblobgames.com/maps/noisy-edges/
   private subdivideLine(
     p1: Coord,
     p2: Coord,

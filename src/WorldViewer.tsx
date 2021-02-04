@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { World, GridFactory } from './World';
-import { Assets } from './types';
+import { Assets, AutogenObjectTile } from './types';
 import { Viewport } from 'pixi-viewport';
 import { WorldGenerator } from './WorldGenerator';
 import { WorldRenderer } from './WorldRenderer';
 import { WorldMinimap } from './WorldMinimap';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { Grid } from 'honeycomb-grid';
+import { Tileset } from './Tileset';
 
 export const WorldViewer = ({
   world,
@@ -22,9 +23,8 @@ export const WorldViewer = ({
     
     const loader = new PIXI.Loader();
     loader.add('hexTemplate', require('./assets/hex-template.png'))
-    loader.onError.add(error => {
-      console.error(error);
-    });
+    loader.add('autogenObjectsPNG', require('./assets/autogen-objects.png'))
+    loader.add('autogenObjectsXML', require('file-loader!./assets/autogen-objects.xml'))
     loader.load(({ resources }) => {
       const size = worldMapRef.current.getBoundingClientRect();
       const app = new PIXI.Application({
@@ -36,8 +36,21 @@ export const WorldViewer = ({
       setLoading(false);
       app.resizeTo = worldMapRef.current;
       console.log('resources', resources);
-
-      const assets = resources as Assets;
+      const assets: Assets = {
+        hexTemplate: resources.hexTemplate,
+        autogenObjects: new Tileset<AutogenObjectTile>(
+          resources.autogenObjectsPNG.texture,
+          resources.autogenObjectsXML.data,
+          data => ({
+            size: parseInt(data.size, 10),
+            terrainTypes: data.terrainTypes
+              ? data.terrainTypes.split(',').map(t => parseInt(t, 10))
+              : [],
+            used: data.used === 'true',
+          })
+        ),
+      };
+      console.log('assets', assets);
 
       const viewport = new Viewport({
         screenWidth: window.innerWidth,

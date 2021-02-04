@@ -1,10 +1,11 @@
 import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
-import { Assets, ColorArray, CoordArray, Corner, cornerDirections, cornerIndexOrder, CornerMap, Direction, directionIndexOrder, DirectionMap, directionCorners, Coord, adjacentDirections } from './types';
-import { colorArrayMatches, midpointPoints, midpoint, rotatePoint } from './utils';
+import { Assets, ColorArray, CoordArray, Corner, cornerDirections, cornerIndexOrder, CornerMap, Direction, directionIndexOrder, DirectionMap, directionCorners, Coord, adjacentDirections, AutogenObjectTile } from './types';
+import { colorArrayMatches, midpointPoints, midpoint, rotatePoint, getImageIndexFromCoord } from './utils';
 import { terrainTransitions, TerrainType } from './World';
-
+import FastPoissonDiskSampling from 'fast-2d-poisson-disk-sampling';
+import { Tileset } from './Tileset';
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -209,11 +210,38 @@ const edgeCenterPoints: DirectionMap<Coord> = {
 
 const centerPoint: Coord = [32, 32];
 
+function placeObject(
+  autogenLayer: ndarray,
+  autogenObjects: Tileset<AutogenObjectTile>,
+  tileID: number,
+  pos: Coord,
+) {
+  const { x: tx, y: ty, width, height } = autogenObjects.tileFrame.get(tileID);
+  for (let x = tx; x < (tx + width); x++) {
+    for (let y = ty; y < (ty + height); y++) {
+      const index = getImageIndexFromCoord([x, y], autogenObjects.imageData.width);
+      const r = autogenObjects.imageData.data[index] / 255;
+      const g = autogenObjects.imageData.data[index + 1] / 255;
+      const b = autogenObjects.imageData.data[index + 2] / 255;
+      const a = autogenObjects.imageData.data[index + 3] / 255;
+      if (a > 0) {
+        const ax = ((x - tx) + pos[0]) - 7;
+        const ay = ((y - ty) + pos[1]) - 14;
+        autogenLayer.set(ax, ay, 0, r);
+        autogenLayer.set(ax, ay, 1, g);
+        autogenLayer.set(ax, ay, 2, b);
+        autogenLayer.set(ax, ay, 3, a);
+      }
+    }
+  }
+}
+
 function drawHexTile(
   hexTile: HexTile,
   width: number,
   height: number,
   templateGrid: ndarray,
+  autogenObjects: Tileset<AutogenObjectTile>,
 ): PIXI.Texture {
   const grid = new TileGrid(hexTile, width, height);
   let cellTypePoints = new Map();
@@ -380,9 +408,33 @@ function drawHexTile(
     1,
   )
 
+  // features
+  let features: Coord[] = [];
+  const poissonDisk = new FastPoissonDiskSampling({
+    shape: [width, height],
+    radius: 5,
+    tries: 10,
+  }, Math.random);
+  poissonDisk.fill();
+  const points = poissonDisk.getAllPoints() as CoordArray;
+  if (points.length > 0) {
+    for (const [x, y] of points) {
+      const cx = Math.round(x);
+      const cy = Math.round(y);
+      if (grid.get(cx, cy) !== CellType.NONE) {
+        // grid.set(cx, cy, CellType.TREE);
+        features.push([cx, cy]);
+      }
+    }
+  }
 
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
+  
+  const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
+  for (const feature of features) {
+    placeObject(autogenLayer, autogenObjects, 20, feature);
+  }
 
   // convert to image
   const buffer = new Float32Array(width * height * 4);
@@ -403,6 +455,16 @@ function drawHexTile(
         buffer[(i * dim) + 1] = 0;
         buffer[(i * dim) + 2] = 0;
         buffer[(i * dim) + 3] = 0;
+      }
+      const r_o = autogenLayer.get(x, y, 0);
+      const g_o = autogenLayer.get(x, y, 1);
+      const b_o = autogenLayer.get(x, y, 2);
+      const a_o = autogenLayer.get(x, y, 3);
+      if (a_o !== 0) {
+        buffer[(i * dim) + 0] = r_o;
+        buffer[(i * dim) + 1] = g_o;
+        buffer[(i * dim) + 2] = b_o;
+        buffer[(i * dim) + 3] = a_o;
       }
       i++;
     }
@@ -483,8 +545,6 @@ export class WorldTileset {
             }
           }
         }
-
-        
       }
     }
     console.log('template grid', this.templateGrid);
@@ -530,7 +590,13 @@ export class WorldTileset {
     this.numTiles++;
     this.tileIDToIndex.set(id, index);
     // console.time(`generating hex ID ${id}`);
-    const texture = drawHexTile(hexTile, this.tileWidth, this.tileHeight, this.templateGrid);
+    const texture = drawHexTile(
+      hexTile,
+      this.tileWidth,
+      this.tileHeight,
+      this.templateGrid,
+      this.assets.autogenObjects,
+    );
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
     sprite.position.set(

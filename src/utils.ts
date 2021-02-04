@@ -196,6 +196,7 @@ export function assert(condition: boolean, message?: string) {
   }
 }
 
+// http://members.chello.at/~easyfilter/bresenham.html
 export function plotLine(
   x0: number, y0: number, x1: number, y1: number,
   setPixel: (x: number, y: number) => void,
@@ -284,4 +285,14 @@ export function colorArrayMatches(color1: ColorArray, color2: ColorArray) {
     color1[1] === color2[1] &&
     color1[2] === color2[2]
   )
+}
+
+export function getImageCoordFromIndex(index: number, width: number, height: number): Coord {
+  const y = index / width;
+  const x = index - y * width;
+  return [x, y];
+}
+
+export function getImageIndexFromCoord(coord: Coord, width: number): number {
+  return (coord[1] * width + coord[0]) * 4;
 }

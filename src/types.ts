@@ -1,3 +1,6 @@
+import { Tileset } from "./Tileset";
+import { TerrainType } from './World';
+
 export type Size = {
   width: number;
   height: number;
@@ -7,8 +10,15 @@ export type Coord = [x: number, y: number];
 export type Line = [p1: Coord, p2: Coord];
 export type CoordArray = Coord[];
 
+export type AutogenObjectTile = {
+  size: number,
+  terrainTypes: TerrainType[],
+  used: boolean,
+};
+
 export type Assets = {
-  hexTemplate: PIXI.LoaderResource
+  hexTemplate: PIXI.LoaderResource,
+  autogenObjects: Tileset<AutogenObjectTile>,
 };
 
 export type ColorArray = [r: number, g: number, b: number];
