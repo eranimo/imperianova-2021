@@ -2,10 +2,12 @@ import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { TileGrid } from './TileGrid';
 import { Assets, ColorArray, CoordArray, Corner, cornerDirections, cornerIndexOrder, CornerMap, Direction, directionIndexOrder, DirectionMap, directionCorners, Coord, adjacentDirections, AutogenObjectTile } from './types';
-import { colorArrayMatches, midpointPoints, midpoint, rotatePoint, getImageIndexFromCoord } from './utils';
+import { colorArrayMatches, midpointPoints, midpoint, rotatePoint, getImageIndexFromCoord, distance, pickRandom } from './utils';
 import { terrainTransitions, TerrainType } from './World';
 import FastPoissonDiskSampling from 'fast-2d-poisson-disk-sampling';
 import { Tileset } from './Tileset';
+import SimplexNoise from 'simplex-noise';
+import { clamp, range } from 'lodash';
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -51,14 +53,31 @@ export enum CellType {
   FOREST,
   ICE,
   SAND,
+  TAIGA,
   TUNDRA,
   RIVER,
   RIVER_MOUTH,
   RIVER_SOURCE,
 
-  TREE,
   ROAD,
 };
+
+type Feature = {
+  coord: Coord,
+  id: number,
+}
+
+type FeatureDef = {
+  ids: number[],
+  radius: number,
+  transitionCellType?: CellType,
+}
+
+const cellTypeFeatures: Partial<Record<CellType, number[]>> = {
+  [CellType.GRASS]: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  [CellType.FOREST]: [20, 21, 22, 23, 24, 25, 26, 27],
+  [CellType.TAIGA]: [40, 41, 42, 43, 44, 45, 46],
+}
 
 
 const directionToCellType = {
@@ -70,7 +89,7 @@ const directionToCellType = {
   [Direction.S]: CellType.DEBUG_S,
 }
 
-const cellTypeColor = {
+const cellTypeColor: Partial<Record<CellType, ColorArray>> = {
   [CellType.DEBUG_SE]: [0, 255, 255],
   [CellType.DEBUG_NE]: [255, 0, 255],
   [CellType.DEBUG_N]: [255, 0, 0],
@@ -100,18 +119,18 @@ const cellTypeColor = {
   [CellType.DEBUG_TOP_RIGHT_1]: [200, 0, 200],
   
   [CellType.OCEAN]: [37, 140, 219],
-  [CellType.GRASS]: [29, 179, 39],
+  [CellType.GRASS]: [120, 178, 76],
   [CellType.BEACH]: [240, 217, 48],
-  [CellType.FOREST]: [57, 117, 47],
+  [CellType.FOREST]: [121, 168, 86],
   [CellType.ICE]: [250, 250, 250],
   [CellType.SAND]: [217, 191, 140],
   [CellType.TUNDRA]: [150, 209, 195],
+  [CellType.TAIGA]: [57, 117, 47],
 
   [CellType.RIVER]: [26, 118, 189],
   [CellType.RIVER_MOUTH]: [16, 108, 179],
   [CellType.RIVER_SOURCE]: [36, 128, 199],
 
-  [CellType.TREE]: [7, 59, 21],
   [CellType.ROAD]: [128, 83, 11],
 }
 
@@ -123,6 +142,7 @@ const renderOrder: CellType[] = [
   CellType.GRASS,
   CellType.BEACH,
   CellType.FOREST,
+  CellType.TAIGA,
   CellType.ICE,
   CellType.SAND,
   CellType.TUNDRA,
@@ -160,13 +180,29 @@ const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
   [TerrainType.GRASSLAND]: CellType.GRASS,
   [TerrainType.FOREST]: CellType.FOREST,
   [TerrainType.GLACIAL]: CellType.ICE,
-  [TerrainType.TAIGA]: CellType.FOREST,
+  [TerrainType.TAIGA]: CellType.TAIGA,
   [TerrainType.TUNDRA]: CellType.TUNDRA,
   [TerrainType.DESERT]: CellType.SAND,
   [TerrainType.RIVER]: CellType.RIVER,
   [TerrainType.RIVER_MOUTH]: CellType.RIVER_MOUTH,
   [TerrainType.RIVER_SOURCE]: CellType.RIVER_SOURCE,
 };
+
+function lighter(color: ColorArray, amount: number): ColorArray {
+  return [
+    clamp(Math.round(color[0] * amount), 0, 255),
+    clamp(Math.round(color[1] * amount), 0, 255),
+    clamp(Math.round(color[2] * amount), 0, 255),
+  ];
+}
+
+function darker(color: ColorArray, amount: number): ColorArray {
+  return [
+    clamp(Math.round(color[0] * amount), 0, 255),
+    clamp(Math.round(color[1] * amount), 0, 255),
+    clamp(Math.round(color[2] * amount), 0, 255),
+  ];
+}
 
 function getHexTileID(hexTile: HexTile) {
   return (
@@ -217,9 +253,12 @@ function placeObject(
   tileID: number,
   pos: Coord,
 ) {
+  if (!autogenObjects.tileFrame.has(tileID)) {
+    throw new Error(`Unknown autogen object with ID ${tileID}`);
+  }
   const { x: tx, y: ty, width, height } = autogenObjects.tileFrame.get(tileID);
-  for (let x = tx; x < (tx + width); x++) {
-    for (let y = ty; y < (ty + height); y++) {
+  for (let y = ty; y < (ty + height); y++) {
+    for (let x = tx; x < (tx + width); x++) {
       const index = getImageIndexFromCoord([x, y], autogenObjects.imageData.width);
       const r = autogenObjects.imageData.data[index] / 255;
       const g = autogenObjects.imageData.data[index + 1] / 255;
@@ -410,11 +449,18 @@ function drawHexTile(
     1,
   )
 
+  const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
+
   // features
-  let features: Coord[] = [];
+  const features = ndarray(new Int8Array(width * height), [width, height]);
+  for (let fy = 0; fy < height; fy++) {
+    for (let fx = 0; fx < width; fx++) {
+      features.set(fx, fy, -1);
+    }
+  }
   const poissonDisk = new FastPoissonDiskSampling({
     shape: [width, height],
-    radius: 5,
+    radius: 3,
     tries: 10,
   }, Math.random);
   poissonDisk.fill();
@@ -423,20 +469,60 @@ function drawHexTile(
     for (const [x, y] of points) {
       const cx = Math.round(x);
       const cy = Math.round(y);
-      if (grid.get(cx, cy) !== CellType.NONE) {
-        // grid.set(cx, cy, CellType.TREE);
-        features.push([cx, cy]);
+      if (
+        (grid.get(cx, cy) === centerCellType || grid.get(cx, cy) === CellType.DEBUG_CENTER) &&
+        cellTypeFeatures[centerCellType]
+      ) {
+        const id = pickRandom(cellTypeFeatures[centerCellType])
+        features.set(cx, cy, id);
       }
     }
   }
 
-  const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
+  
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
   
   const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
-  for (const feature of features) {
-    placeObject(autogenLayer, autogenObjects, 20, feature);
+  for (let fy = 0; fy < height; fy++) {
+    for (let fx = 0; fx < width; fx++) {
+      const featureID = features.get(fx, fy);
+      if (featureID >= 0) {
+        placeObject(autogenLayer, autogenObjects, featureID, [fx, fy]);
+      }
+    }
   }
+
+  // const MAX_HILL_HEIGHT = 10;
+  // const HILL_NOISE_SCALE = 10;
+  // const heightMap = ndarray(new Uint8ClampedArray(width * height), [width, height]);
+  // const noise = new SimplexNoise();
+  // for (let y = 0; y < height; y++) {
+  //   for (let x = 0; x < width; x++) {
+  //     if (grid.get(x, y) === CellType.SAND) {
+  //       const curve = 1 - clamp(distance(centerPoint, [x, y]) / 28, 0, 1);
+  //       const v = (noise.noise2D(x / HILL_NOISE_SCALE, y / HILL_NOISE_SCALE) + 1) / 2;
+  //       heightMap.set(x, y, Math.max(0, Math.round(curve * v * MAX_HILL_HEIGHT)) - 2);
+  //     }
+  //   }
+  // }
+  
+  // for (let y = OFFSET_Y; y < height; y++) {
+  //   for (let x = 0; x < width; x++) {
+  //     const height = heightMap.get(x, y)
+  //     if (height > 0) {
+  //       for (let h = 0; h < height; h++) {
+  //         const yy = y - h;
+  //         const v = 1 + ((height / MAX_HILL_HEIGHT) * 0.5);
+  //         const [r, g, b] = lighter(cellTypeColor[centerCellType], v);
+  //         autogenLayer.set(x, yy, 0, r / 255);
+  //         autogenLayer.set(x, yy, 1, g / 255);
+  //         autogenLayer.set(x, yy, 2, b / 255);
+  //         autogenLayer.set(x, yy, 3, 1);
+  //       }
+  //     }
+  //   }
+  // }
+
 
   // convert to image
   const buffer = new Float32Array(width * height * 4);

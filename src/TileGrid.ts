@@ -41,15 +41,6 @@ export class TileGrid {
   }
 
   plotLine(p1: Coord, p2: Coord, cellType: CellType) {
-    // const coords = bresenhamLinePlot(
-    //   p1[0],
-    //   p1[1],
-    //   p2[0],
-    //   p2[1],
-    // )
-    // for (const [x, y] of coords) {
-    //   this.set(x, y, cellType);
-    // }
     plotLine(
       p1[0],
       p1[1],

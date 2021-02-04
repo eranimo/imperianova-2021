@@ -69,6 +69,13 @@ export function midpoint(p1: Coord, p2: Coord): Coord {
   ];
 }
 
+export function distance(p1: Coord, p2: Coord): number {
+  return Math.sqrt(
+    Math.pow(p1[0] - p2[0], 2) + 
+    Math.pow(p1[1] - p2[1], 2)
+  )
+}
+
 export function midpointPoints(points: CoordArray): Coord {
   let x = 0;
   let y = 0;
@@ -295,4 +302,8 @@ export function getImageCoordFromIndex(index: number, width: number, height: num
 
 export function getImageIndexFromCoord(coord: Coord, width: number): number {
   return (coord[1] * width + coord[0]) * 4;
+}
+
+export function pickRandom<T>(array: Array<T>, rng: () => number = Math.random) {
+  return array[Math.round(rng() * (array.length - 1))];
 }
