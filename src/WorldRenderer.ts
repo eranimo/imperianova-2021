@@ -2,7 +2,7 @@ import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
 import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
 import { Hex, terrainColors, terrainTransitions, TerrainType, World } from './World';
-import { WorldTileset, HexTile } from './WorldTileset';
+import { WorldTileset, HexTile, OFFSET_Y } from './WorldTileset';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -203,7 +203,7 @@ export class WorldRenderer {
         terrainLayer.addFrame(
           texture,
           (x - minX),
-          (y - minY),
+          (y - OFFSET_Y - minY),
         );
       }
       this.hexTiles.set(hexObj, hexTile);

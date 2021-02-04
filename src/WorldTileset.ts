@@ -208,7 +208,7 @@ const edgeCenterPoints: DirectionMap<Coord> = {
   [Direction.S]: [31, 59],
 };
 
-const centerPoint: Coord = [32, 32];
+export const OFFSET_Y = 10;
 
 function placeObject(
   autogenLayer: ndarray,
@@ -244,12 +244,13 @@ function drawHexTile(
   autogenObjects: Tileset<AutogenObjectTile>,
 ): PIXI.Texture {
   const grid = new TileGrid(hexTile, width, height);
+  const centerPoint: Coord = [32, 32 + OFFSET_Y];
   let cellTypePoints = new Map();
 
   // replace template grid with correct cell types
   for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      grid.set(x, y, templateGrid.get(x, y));
+    for (let y = 0; y < (height - OFFSET_Y); y++) {
+      grid.set(x, y + OFFSET_Y, templateGrid.get(x, y));
     }
   }
 
@@ -593,7 +594,7 @@ export class WorldTileset {
     const texture = drawHexTile(
       hexTile,
       this.tileWidth,
-      this.tileHeight,
+      this.tileHeight + OFFSET_Y,
       this.templateGrid,
       this.assets.autogenObjects,
     );
