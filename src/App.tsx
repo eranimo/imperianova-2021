@@ -9,7 +9,7 @@ import { random, times } from 'lodash';
 
 const options: WorldGeneratorOptions = {
   size: 75,
-  sealevel: 100,
+  sealevel: 140,
   seed: 123,
 };
 

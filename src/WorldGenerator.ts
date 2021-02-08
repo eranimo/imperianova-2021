@@ -43,6 +43,7 @@ export class WorldGenerator {
   generateTerrain() {
     const rng = Alea(this.seed);
     const noise = new SimplexNoise(rng);
+    const { sealevel } = this.options;
     this.world.hexgrid.forEach((hex, index) => {
       const { lat, long } = this.world.getHexCoordinate(hex);
       const inc = ((lat + 90) / 180) * Math.PI;
@@ -63,37 +64,42 @@ export class WorldGenerator {
         }
       }
       const deg = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 2) + 1) / 2;
-      if (Math.abs(lat) > 50 + (deg * 20)) {
-        if (height < 140) {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
-        } else if (height < 165) {
-          const isTaiga = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
-          this.world.terrain.set(hex.x, hex.y, isTaiga < 0.55 ? TerrainType.TUNDRA : TerrainType.TAIGA);
-        } else {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.TUNDRA);
-        }
-      } else if (Math.abs(lat) > 40 + (deg * 20)) {
-        if (height < 140) {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
-        } else {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.TAIGA);
-        }
-      } else if (Math.abs(lat) > 30 +(deg * 20)) {
-        if (height < 140) {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
-        } else {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.FOREST);
-        }
+      if (height < (sealevel - 20)) {
+        this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
+      } else if (height < sealevel) {
+        this.world.terrain.set(hex.x, hex.y, TerrainType.COAST);
       } else {
-        if (height < 140) {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
-        } else if (height < 150) {
-          const isForested = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
-          this.world.terrain.set(hex.x, hex.y, isForested < 0.5 ? TerrainType.GRASSLAND : TerrainType.FOREST);
-        } else if (height < 175) {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.GRASSLAND);
+        if (Math.abs(lat) > 50 + (deg * 20)) {
+          if (height < (sealevel + 25)) {
+            const isTaiga = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
+            this.world.terrain.set(hex.x, hex.y, isTaiga < 0.55 ? TerrainType.TUNDRA : TerrainType.TAIGA);
+          } else {
+            this.world.terrain.set(hex.x, hex.y, TerrainType.TUNDRA);
+          }
+        } else if (Math.abs(lat) > 40 + (deg * 20)) {
+          this.world.terrain.set(hex.x, hex.y, TerrainType.TAIGA);
+        } else if (Math.abs(lat) > 30 +(deg * 20)) {
+          this.world.terrain.set(hex.x, hex.y, TerrainType.FOREST);
         } else {
-          this.world.terrain.set(hex.x, hex.y, TerrainType.DESERT);
+          if (height < (sealevel + 10)) {
+            const isForested = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
+            this.world.terrain.set(hex.x, hex.y, isForested < 0.5 ? TerrainType.GRASSLAND : TerrainType.FOREST);
+          } else if (height < (sealevel + 35)) {
+            this.world.terrain.set(hex.x, hex.y, TerrainType.GRASSLAND);
+          } else {
+            this.world.terrain.set(hex.x, hex.y, TerrainType.DESERT);
+          }
+        }
+      }
+    });
+    // any ocean hex with land neighbors is a coast hex
+    this.world.hexgrid.forEach((hex, index) => {
+      if (!this.world.isLand(hex)) {
+        for (const neighbor of this.world.hexNeighbors(hex)) {
+          if (this.world.isLand(neighbor)) {
+            this.world.terrain.set(hex.x, hex.y, TerrainType.COAST);
+            break;
+          }
         }
       }
     });
@@ -103,10 +109,10 @@ export class WorldGenerator {
     this.world.landmasses = [];
     let visited = new Set<Hex>();
     this.world.hexgrid.forEach(hex => {
-      if (this.world.getTerrain(hex) !== TerrainType.OCEAN && !visited.has(hex)) {
+      if (this.world.isLand(hex) && !visited.has(hex)) {
         const region = this.world.floodFill(
           hex,
-          (h1, h2) => this.world.getTerrain(h2) !== TerrainType.OCEAN,
+          (h1, h2) => this.world.isLand(h2),
           visited,
         );
         const hexes = Array.from(region);
@@ -253,15 +259,14 @@ export class WorldGenerator {
     for (const edge of hexEdges) {
       if (
         edge.o1 && edge.o2 &&
-        this.world.getTerrainForCoord(edge.h1.x, edge.h1.y) !== TerrainType.OCEAN &&
-        this.world.getTerrainForCoord(edge.h2.x, edge.h2.y) !== TerrainType.OCEAN &&
+        this.world.isLand(edge.h1) &&
+        this.world.isLand(edge.h2) &&
         this.world.getTerrainForCoord(edge.h1.x, edge.h1.y) !== TerrainType.GLACIAL &&
         this.world.getTerrainForCoord(edge.h2.x, edge.h2.y) !== TerrainType.GLACIAL &&
         (
-          (this.world.getTerrainForCoord(edge.o1.x, edge.o1.y) === TerrainType.OCEAN &&
-          this.world.getTerrainForCoord(edge.o2.x, edge.o2.y) !== TerrainType.OCEAN) ||
-          (this.world.getTerrainForCoord(edge.o1.x, edge.o1.y) !== TerrainType.OCEAN &&
-          this.world.getTerrainForCoord(edge.o2.x, edge.o2.y) === TerrainType.OCEAN)
+          (!this.world.isLand(edge.o1) && this.world.isLand(edge.o2))
+          ||
+          (this.world.isLand(edge.o1) && !this.world.isLand(edge.o2))
         )
       ) {
         coastlineEdges.push(edge);
@@ -286,10 +291,7 @@ export class WorldGenerator {
         edgeHasRiver.has(currentEdge.id) ||
         (
           lastEdges.length > 0
-          ? (
-            this.world.getTerrainForCoord(currentEdge.o1.x, currentEdge.o1.y) === TerrainType.OCEAN ||
-            this.world.getTerrainForCoord(currentEdge.o2.x, currentEdge.o2.y) === TerrainType.OCEAN
-          )
+          ? (!this.world.isLand(currentEdge.o1) || !this.world.isLand(currentEdge.o2))
           : false
         )
       ) {

@@ -95,7 +95,7 @@ export class WorldRenderer {
 
     hexes.forEach((hex, index) => {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
-      if (terrainType === TerrainType.MAP_EDGE) return;
+      if (terrainType === TerrainType.NONE) return;
       const hexObj = this.world.getHex(hex.x, hex.y);
       const cornerTerrainTypes: Partial<CornerMap<TerrainType>> = {};
 
@@ -134,19 +134,19 @@ export class WorldRenderer {
           if (
             (this.world.riverHexPairs.has(hexObj) && 
             this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
-            this.world.getTerrainForCoord(neighborOne.x, neighborOne.y) === TerrainType.OCEAN) ||
+            !this.world.isLand(neighborOne)) ||
             (this.world.riverHexPairs.has(hexObj) && 
             this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
-            this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y) === TerrainType.OCEAN)
+            !this.world.isLand(neighborTwo))
           ) {
             cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
           } else if (
             (this.world.riverHexPairs.has(hexObj) && 
             this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
-            this.world.getTerrainForCoord(neighborOne.x, neighborOne.y) !== TerrainType.OCEAN) ||
+            this.world.isLand(neighborOne)) ||
             (this.world.riverHexPairs.has(hexObj) && 
             this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
-            this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y) !== TerrainType.OCEAN)
+            this.world.isLand(neighborTwo))
           ) {
             cornerTerrainTypes[corner] = TerrainType.RIVER_SOURCE;
           } else {
@@ -157,11 +157,11 @@ export class WorldRenderer {
           this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)
         ) {
           // cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
-          cornerTerrainTypes[corner] = terrainType === TerrainType.OCEAN
+          cornerTerrainTypes[corner] = (terrainType === TerrainType.OCEAN || terrainType === TerrainType.COAST)
             ? TerrainType.RIVER_MOUTH
             : TerrainType.RIVER_SOURCE;
         } else {
-          let cornerTerrainType: TerrainType = TerrainType.MAP_EDGE;
+          let cornerTerrainType: TerrainType = TerrainType.NONE;
           if (neighborOne && neighborTwo) {
             const neighborOneTerrain = this.world.getTerrainForCoord(neighborOne.x, neighborOne.y);
             const neighborTwoTerrain = this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y);

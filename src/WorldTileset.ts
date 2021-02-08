@@ -48,6 +48,7 @@ export enum CellType {
   DEBUG_TOP_RIGHT_1,
 
   OCEAN,
+  COAST,
   GRASS,
   BEACH,
   FOREST,
@@ -118,7 +119,8 @@ const cellTypeColor: Partial<Record<CellType, ColorArray>> = {
   [CellType.DEBUG_TOP_RIGHT_0]: [100, 0, 0],
   [CellType.DEBUG_TOP_RIGHT_1]: [200, 0, 200],
   
-  [CellType.OCEAN]: [37, 140, 219],
+  [CellType.COAST]: [37, 140, 219],
+  [CellType.OCEAN]: [30, 118, 186],
   [CellType.GRASS]: [120, 178, 76],
   [CellType.BEACH]: [240, 217, 48],
   [CellType.FOREST]: [121, 168, 86],
@@ -138,6 +140,7 @@ const renderOrder: CellType[] = [
   CellType.RIVER,
   CellType.RIVER_MOUTH,
   CellType.RIVER_SOURCE,
+  CellType.COAST,
   CellType.OCEAN,
   CellType.GRASS,
   CellType.BEACH,
@@ -177,6 +180,7 @@ const cornerSideCellTypes = {
 
 const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
   [TerrainType.OCEAN]: CellType.OCEAN,
+  [TerrainType.COAST]: CellType.COAST,
   [TerrainType.GRASSLAND]: CellType.GRASS,
   [TerrainType.FOREST]: CellType.FOREST,
   [TerrainType.GLACIAL]: CellType.ICE,

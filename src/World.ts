@@ -8,25 +8,41 @@ import { Subject } from 'rxjs';
 
 
 export enum TerrainType {
-  MAP_EDGE = 0,
+  NONE = 0,
   OCEAN = 1,
-  GRASSLAND = 2,
-  FOREST = 3,
-  DESERT = 4,
-  TAIGA = 5,
-  TUNDRA = 6,
-  GLACIAL = 7,
-  RIVER = 8, // special
-  RIVER_MOUTH = 9, // special
-  RIVER_SOURCE = 10, // special
+  COAST = 2,
+  GRASSLAND = 3,
+  FOREST = 4,
+  DESERT = 5,
+  TAIGA = 6,
+  TUNDRA = 7,
+  GLACIAL = 8,
+  RIVER = 9, // special
+  RIVER_MOUTH = 10, // special
+  RIVER_SOURCE = 11, // special
   __LENGTH,
 }
+
+export const terrainTypeIndexOrder = [
+  TerrainType.OCEAN,
+  TerrainType.COAST,
+  TerrainType.GRASSLAND,
+  TerrainType.FOREST,
+  TerrainType.DESERT,
+  TerrainType.TAIGA,
+  TerrainType.TUNDRA,
+  TerrainType.GLACIAL,
+  TerrainType.RIVER,
+  TerrainType.RIVER_MOUTH,
+  TerrainType.RIVER_SOURCE,
+];
 
 export type TerrainTypeMap<T> = Record<Exclude<TerrainType, TerrainType.__LENGTH>, T>;
 
 export const terrainColors: TerrainTypeMap<number> = {
-  [TerrainType.MAP_EDGE]: 0x000000,
-  [TerrainType.OCEAN]: 0x3F78CB,
+  [TerrainType.NONE]: 0x000000,
+  [TerrainType.OCEAN]: 0x3261a6,
+  [TerrainType.COAST]: 0x3F78CB,
   [TerrainType.GRASSLAND]: 0x81B446,
   [TerrainType.FOREST]: 0x236e29,
   [TerrainType.DESERT]: 0xD9BF8C,
@@ -39,8 +55,9 @@ export const terrainColors: TerrainTypeMap<number> = {
 };
 
 export const terrainTypeTitles: TerrainTypeMap<string> = {
-  [TerrainType.MAP_EDGE]: 'MAP EDGE',
+  [TerrainType.NONE]: 'MAP EDGE',
   [TerrainType.OCEAN]: 'Ocean',
+  [TerrainType.COAST]: 'Coast',
   [TerrainType.GRASSLAND]: 'Grassland',
   [TerrainType.FOREST]: 'Forest',
   [TerrainType.DESERT]: 'Desert',
@@ -53,11 +70,12 @@ export const terrainTypeTitles: TerrainTypeMap<string> = {
 };
 
 export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
-  [TerrainType.OCEAN]: [TerrainType.DESERT, TerrainType.GRASSLAND, TerrainType.FOREST, TerrainType.TAIGA, TerrainType.TUNDRA, TerrainType.GLACIAL],
+  [TerrainType.COAST]: [TerrainType.DESERT, TerrainType.GRASSLAND, TerrainType.FOREST, TerrainType.TAIGA, TerrainType.TUNDRA, TerrainType.GLACIAL],
   [TerrainType.FOREST]: [TerrainType.TAIGA, TerrainType.GRASSLAND],
   [TerrainType.DESERT]: [TerrainType.GRASSLAND, TerrainType.FOREST],
   [TerrainType.TUNDRA]: [TerrainType.GLACIAL, TerrainType.TAIGA],
   [TerrainType.TAIGA]: [TerrainType.GRASSLAND, TerrainType.GLACIAL],
+  [TerrainType.OCEAN]: [TerrainType.COAST],
 };
 
 export type Hex = Honeycomb.Hex<IHex>; 
@@ -365,7 +383,10 @@ export class World {
   }
 
   isLand(hex: Hex) {
-    return this.getTerrainForCoord(hex.x, hex.y) !== TerrainType.OCEAN;
+    return (
+      this.getTerrainForCoord(hex.x, hex.y) !== TerrainType.OCEAN &&
+      this.getTerrainForCoord(hex.x, hex.y) !== TerrainType.COAST
+    );
   }
 
   debugNeighborTerrain(x: number, y: number) {
