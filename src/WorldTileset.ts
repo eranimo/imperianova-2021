@@ -47,15 +47,15 @@ export enum CellType {
   DEBUG_TOP_RIGHT_0,
   DEBUG_TOP_RIGHT_1,
 
-  OCEAN,
-  COAST,
-  GRASS,
-  BEACH,
-  FOREST,
-  ICE,
-  SAND,
-  TAIGA,
-  TUNDRA,
+  TERRAIN_OCEAN,
+  TERRAIN_COAST,
+  TERRAIN_GRASSLAND,
+  TERRAIN_FOREST,
+  TERRAIN_GLACIAL,
+  TERRAIN_DESERT,
+  TERRAIN_TAIGA,
+  TERRAIN_TUNDRA,
+
   RIVER,
   RIVER_MOUTH,
   RIVER_SOURCE,
@@ -75,9 +75,18 @@ type FeatureDef = {
 }
 
 const cellTypeFeatures: Partial<Record<CellType, number[]>> = {
-  [CellType.GRASS]: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-  [CellType.FOREST]: [20, 21, 22, 23, 24, 25, 26, 27],
-  [CellType.TAIGA]: [40, 41, 42, 43, 44, 45, 46],
+  [CellType.TERRAIN_GRASSLAND]: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  [CellType.TERRAIN_FOREST]: [20, 21, 22, 23, 24, 25, 26, 27],
+  [CellType.TERRAIN_TAIGA]: [40, 41, 42, 43, 44, 45, 46],
+}
+
+const cellTypeTransitions = {
+  [CellType.TERRAIN_GRASSLAND]: {
+    other: CellType.TERRAIN_COAST,
+    paint: [
+      { operation: 'expand', width: 2, chance: 0.9, color: [] },
+    ]
+  },
 }
 
 
@@ -119,19 +128,18 @@ const cellTypeColor: Partial<Record<CellType, ColorArray>> = {
   [CellType.DEBUG_TOP_RIGHT_0]: [100, 0, 0],
   [CellType.DEBUG_TOP_RIGHT_1]: [200, 0, 200],
   
-  [CellType.COAST]: [37, 140, 219],
-  [CellType.OCEAN]: [30, 118, 186],
-  [CellType.GRASS]: [120, 178, 76],
-  [CellType.BEACH]: [240, 217, 48],
-  [CellType.FOREST]: [121, 168, 86],
-  [CellType.ICE]: [250, 250, 250],
-  [CellType.SAND]: [217, 191, 140],
-  [CellType.TUNDRA]: [150, 209, 195],
-  [CellType.TAIGA]: [57, 117, 47],
+  [CellType.TERRAIN_COAST]: [37, 140, 219],
+  [CellType.TERRAIN_OCEAN]: [30, 118, 186],
+  [CellType.TERRAIN_GRASSLAND]: [120, 178, 76],
+  [CellType.TERRAIN_FOREST]: [121, 168, 86],
+  [CellType.TERRAIN_GLACIAL]: [250, 250, 250],
+  [CellType.TERRAIN_DESERT]: [217, 191, 140],
+  [CellType.TERRAIN_TUNDRA]: [150, 209, 195],
+  [CellType.TERRAIN_TAIGA]: [57, 117, 47],
 
-  [CellType.RIVER]: [26, 118, 189],
-  [CellType.RIVER_MOUTH]: [16, 108, 179],
-  [CellType.RIVER_SOURCE]: [36, 128, 199],
+  [CellType.RIVER]: [37, 140, 219],
+  [CellType.RIVER_MOUTH]: [37, 140, 219],
+  [CellType.RIVER_SOURCE]: [37, 140, 219],
 
   [CellType.ROAD]: [128, 83, 11],
 }
@@ -140,15 +148,14 @@ const renderOrder: CellType[] = [
   CellType.RIVER,
   CellType.RIVER_MOUTH,
   CellType.RIVER_SOURCE,
-  CellType.COAST,
-  CellType.OCEAN,
-  CellType.GRASS,
-  CellType.BEACH,
-  CellType.FOREST,
-  CellType.TAIGA,
-  CellType.ICE,
-  CellType.SAND,
-  CellType.TUNDRA,
+  CellType.TERRAIN_COAST,
+  CellType.TERRAIN_OCEAN,
+  CellType.TERRAIN_GRASSLAND,
+  CellType.TERRAIN_FOREST,
+  CellType.TERRAIN_TAIGA,
+  CellType.TERRAIN_GLACIAL,
+  CellType.TERRAIN_DESERT,
+  CellType.TERRAIN_TUNDRA,
 ]
 
 const directionCellTypes = {
@@ -179,14 +186,14 @@ const cornerSideCellTypes = {
 }
 
 const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
-  [TerrainType.OCEAN]: CellType.OCEAN,
-  [TerrainType.COAST]: CellType.COAST,
-  [TerrainType.GRASSLAND]: CellType.GRASS,
-  [TerrainType.FOREST]: CellType.FOREST,
-  [TerrainType.GLACIAL]: CellType.ICE,
-  [TerrainType.TAIGA]: CellType.TAIGA,
-  [TerrainType.TUNDRA]: CellType.TUNDRA,
-  [TerrainType.DESERT]: CellType.SAND,
+  [TerrainType.OCEAN]: CellType.TERRAIN_OCEAN,
+  [TerrainType.COAST]: CellType.TERRAIN_COAST,
+  [TerrainType.GRASSLAND]: CellType.TERRAIN_GRASSLAND,
+  [TerrainType.FOREST]: CellType.TERRAIN_FOREST,
+  [TerrainType.GLACIAL]: CellType.TERRAIN_GLACIAL,
+  [TerrainType.TAIGA]: CellType.TERRAIN_TAIGA,
+  [TerrainType.TUNDRA]: CellType.TERRAIN_TUNDRA,
+  [TerrainType.DESERT]: CellType.TERRAIN_DESERT,
   [TerrainType.RIVER]: CellType.RIVER,
   [TerrainType.RIVER_MOUTH]: CellType.RIVER_MOUTH,
   [TerrainType.RIVER_SOURCE]: CellType.RIVER_SOURCE,
@@ -343,6 +350,29 @@ function drawHexTile(
     }
   }
 
+  // flood fill center of tile
+  grid.floodFill(
+    Math.round(width / 2),
+    Math.round(height / 2),
+    CellType.DEBUG_CENTER,
+    value => value === 0,
+  );
+
+  // draw a line from each river mouth cell to the center of the hex
+  // to ensure rivers actually flow into the ocean
+  if (hexTile.terrainType === TerrainType.COAST) {
+    const riverMouthLines: [Coord, Coord][]  = [];
+    grid.forEachCell((x, y) => {
+      if (grid.get(x, y) === CellType.RIVER_MOUTH) {
+        const point: Coord = [x, y];
+        riverMouthLines.push([point, centerPoint]);
+      }
+    });
+    for (const [p1, p2] of riverMouthLines) {
+      grid.plotLine(p1, p2, CellType.RIVER_MOUTH);
+    }
+  }
+
   for (let x = 0; x < width; x++) {
     for (let y = 0; y < height; y++) {
       const cellType = grid.get(x, y);
@@ -356,12 +386,10 @@ function drawHexTile(
     }
   }
 
-  // flood fill center of tile
-  grid.floodFill(
-    Math.round(width / 2),
-    Math.round(height / 2),
-    CellType.DEBUG_CENTER,
-    value => value === 0,
+  const isRiver = cellType => (
+    cellType === CellType.RIVER
+    || cellType === CellType.RIVER_MOUTH
+    || cellType === CellType.RIVER_SOURCE
   );
 
   // terrain transitions
@@ -370,7 +398,7 @@ function drawHexTile(
       const cells = cellTypePoints.get(cellType);
       if (!cells) continue;
       let newCells: CoordArray;
-      if (cellType === CellType.RIVER && count >= 3) {
+      if (isRiver(cellType) && count >= 3) {
         continue;
       }
       newCells = grid.expandNaturally(
@@ -378,20 +406,22 @@ function drawHexTile(
         value => value == CellType.DEBUG_CENTER,
         cellType,
         1,
-        cellType === CellType.RIVER ? 0.85 : 0.60,
+        isRiver(cellType) ? 0.85 : 0.70,
       );
-      grid.removeIslandNeighbors(
-        cells,
-        CellType.DEBUG_CENTER,
-        cellType,
-        cellType,
-      );
-      grid.removeIslandNeighbors(
-        cells,
-        cellType,
-        CellType.DEBUG_CENTER,
-        CellType.DEBUG_CENTER,
-      );
+      if (count === 4) {
+        grid.removeIslandNeighbors(
+          cells,
+          CellType.DEBUG_CENTER,
+          cellType,
+          cellType,
+        );
+        grid.removeIslandNeighbors(
+          cells,
+          cellType,
+          CellType.DEBUG_CENTER,
+          CellType.DEBUG_CENTER,
+        );
+      }
       cellTypePoints.set(cellType, newCells);
     }
   }
@@ -454,6 +484,7 @@ function drawHexTile(
   )
 
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
+  grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
   // features
   const features = ndarray(new Int8Array(width * height), [width, height]);
@@ -473,18 +504,15 @@ function drawHexTile(
     for (const [x, y] of points) {
       const cx = Math.round(x);
       const cy = Math.round(y);
+      const cellType = grid.get(cx, cy);
       if (
-        (grid.get(cx, cy) === centerCellType || grid.get(cx, cy) === CellType.DEBUG_CENTER) &&
-        cellTypeFeatures[centerCellType]
+        cellTypeFeatures[cellType]
       ) {
-        const id = pickRandom(cellTypeFeatures[centerCellType])
+        const id = pickRandom(cellTypeFeatures[cellType])
         features.set(cx, cy, id);
       }
     }
   }
-
-  
-  grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
   
   const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
   for (let fy = 0; fy < height; fy++) {
