@@ -1,5 +1,5 @@
 import { CornerMap, DirectionMap, Direction, Corner, ColorArray } from './types';
-import { TerrainType } from './World';
+import { TerrainType } from './terrain';
 
 export type HexTile = {
   terrainType: TerrainType,

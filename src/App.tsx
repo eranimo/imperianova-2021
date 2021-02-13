@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { TerrainType, World } from './World';
+import { World } from './World';
 import { WorldGenerator, WorldGeneratorOptions } from './WorldGenerator';
 import { WorldViewer } from './WorldViewer';
 import { Direction } from './types';
@@ -7,8 +7,14 @@ import { WorldGrid } from './WorldGrid';
 import Alea from 'alea';
 import { random, times } from 'lodash';
 
+
+enum WorldSize {
+  SMALL = 75,
+  MEDIUM = 150,
+  LARGE = 300,
+}
 const options: WorldGeneratorOptions = {
-  size: 75,
+  size: WorldSize.SMALL,
   sealevel: 140,
   seed: 123,
 };

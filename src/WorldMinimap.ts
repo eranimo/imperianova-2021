@@ -1,8 +1,9 @@
-import { World, terrainColors, Hex } from './World';
+import { World, Hex } from './World';
 import { Assets, ColorArray, Size, Coord, CornerMap } from './types';
 import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
+import { terrainColors } from './terrain';
 
 
 export class WorldMinimap {

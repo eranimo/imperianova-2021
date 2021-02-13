@@ -1,21 +1,8 @@
-import { Size } from './types';
+import { Size, ExportedTileset } from './types';
 
 export type TilesetTile<T> =  {
   id: number;
   properties: T,
-}
-
-export type ExportedTileset = {
-  buffer: Uint8ClampedArray,
-  size: Size,
-  tiles: {
-    [tileID: number]: {
-      x: number,
-      y: number,
-      width: number,
-      height: number,
-    }
-  }
 }
 
 export class Tileset<T> {

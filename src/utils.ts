@@ -268,6 +268,18 @@ export function plotQuadBezierSeg(
   plotLine(x0,y0, x2,y2, setPixel); //plot remaining part to end
 }  
 
+export function logTime(label: string) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    const originalMethod = descriptor.value;
+    descriptor.value = function (...args: any[]) {
+      console.time(label);
+      const result = originalMethod.apply(this, args);
+      console.timeEnd(label);
+      return result;
+    }
+  }
+}
+
 export function logGroupTime(label: string, closed: boolean = false) {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;

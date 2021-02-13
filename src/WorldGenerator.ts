@@ -7,7 +7,8 @@ import SimplexNoise from 'simplex-noise';
 import { MultiDictionary, Queue } from 'typescript-collections';
 import { adjacentDirections, Direction, directionIndexOrder, DirectionMap, oppositeDirections, Size } from './types';
 import { logGroupTime, octaveNoise } from './utils';
-import { Edge, Hex, World, GridFactory, TerrainType, terrainTypeTitles } from './World';
+import { Edge, Hex, World, GridFactory } from './World';
+import { TerrainType } from './terrain';
 
 
 export type WorldGeneratorOptions = {

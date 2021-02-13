@@ -1,5 +1,5 @@
 import { Tileset } from "./Tileset";
-import { TerrainType } from './World';
+import { TerrainType } from './terrain';
 
 export type Size = {
   width: number;
@@ -146,3 +146,16 @@ export const cornerIndexOrder = [
   Corner.TOP_LEFT,
   Corner.TOP_RIGHT,
 ];
+
+export type ExportedTileset = {
+  buffer: Uint8ClampedArray,
+  size: Size,
+  tiles: {
+    [tileID: number]: {
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    }
+  }
+}

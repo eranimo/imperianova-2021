@@ -2,16 +2,15 @@ import localForage from 'localforage';
 import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { CellType, cellTypeColor, cornerCellTypes, cornerSideCellTypes, directionCellTypes, getHexTileID, HexTile, OFFSET_Y } from './hexTile';
-import { Assets, ColorArray, cornerIndexOrder, directionIndexOrder } from './types';
-import { colorArrayMatches } from './utils';
+import { Assets, ColorArray, cornerIndexOrder, directionIndexOrder, ExportedTileset } from './types';
+import { colorArrayMatches, logGroupTime, logTime } from './utils';
 import { spawn, Pool, Worker } from 'threads';
-import { ExportedTileset } from './Tileset';
 import TileRendererWorker from 'worker-loader!./workers/tileRenderer.worker';
 import { reject } from 'lodash';
 
 
 const ENABLE_TILE_CACHE = false;
-const TILE_RENDERER_POOL_SIZE = 10;
+const TILE_RENDERER_POOL_SIZE = navigator.hardwareConcurrency;
 
 localForage.config({
   driver: localForage.INDEXEDDB,
@@ -53,7 +52,14 @@ export class WorldTileset {
     this.tileIDToIndex = new Map();
     this.tileBufferStore = {};
     this.numTiles = 0;
-    this.tileRenderWorkerPool = Pool(() => spawn(new TileRendererWorker()), TILE_RENDERER_POOL_SIZE);
+    this.tileRenderWorkerPool = Pool(
+      () => spawn(new TileRendererWorker()),
+      {
+        size: TILE_RENDERER_POOL_SIZE,
+        name: 'tileRenderer worker',
+        // concurrency: 1000,
+      }
+    );
 
     // generate template grid buffer
     this.templateGridBuffer = new SharedArrayBuffer(this.tileWidth * this.tileHeight * Uint8Array.BYTES_PER_ELEMENT);
@@ -235,19 +241,22 @@ export class WorldTileset {
     return texture;
   }
 
+  @logTime('updateTileset')
   public updateTileset() {
-    this.renderer.render(this.container, this.renderTexture);
+    this.renderer.render(this.container, this.renderTexture, false, null, false);
   }
 
   public saveTileStore() {
-    console.time('save tile store');
-    const store = {};
-    for (const [key, buffer] of Object.entries(this.tileBufferStore)) {
-      const newBuffer = new Float32Array(buffer.length);
-      newBuffer.set(buffer, 0);
-      store[key] = newBuffer;
+    if (ENABLE_TILE_CACHE) {
+      console.time('save tile store');
+      const store = {};
+      for (const [key, buffer] of Object.entries(this.tileBufferStore)) {
+        const newBuffer = new Float32Array(buffer.length);
+        newBuffer.set(buffer, 0);
+        store[key] = newBuffer;
+      }
+      localForage.setItem('tileBufferStore', store);
+      console.timeEnd('save tile store');
     }
-    localForage.setItem('tileBufferStore', store);
-    console.timeEnd('save tile store');
   }
 }

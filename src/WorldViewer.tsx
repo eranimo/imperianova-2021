@@ -1,13 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { World, GridFactory } from './World';
-import { Assets, AutogenObjectTile } from './types';
 import { Viewport } from 'pixi-viewport';
-import { WorldGenerator } from './WorldGenerator';
-import { WorldRenderer } from './WorldRenderer';
-import { WorldMinimap } from './WorldMinimap';
-import { BehaviorSubject, Subject } from 'rxjs';
-import { Grid } from 'honeycomb-grid';
+import React, { useEffect, useRef, useState } from 'react';
+import { BehaviorSubject } from 'rxjs';
 import { Tileset } from './Tileset';
+import { Assets, AutogenObjectTile } from './types';
+import { GridFactory, World } from './World';
+import { WorldMinimap } from './WorldMinimap';
+import { WorldRenderer } from './WorldRenderer';
 
 export const WorldViewer = ({
   world,

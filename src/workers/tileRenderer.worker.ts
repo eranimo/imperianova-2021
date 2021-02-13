@@ -4,11 +4,14 @@ import ndarray from 'ndarray';
 import { expose, Transfer } from 'threads/worker';
 import { CellType, cellTypeColor, cellTypeFeatures, cornerCellTypes, cornerSideCellTypes, directionCellTypes, HexTile, OFFSET_Y, renderOrder, terrainPrimaryCellTypes } from '../hexTile';
 import { TileGrid } from '../TileGrid';
-import { ExportedTileset } from '../Tileset';
-import { ColorArray, Coord, CoordArray, cornerDirections, cornerIndexOrder, Direction, directionIndexOrder, DirectionMap, Size } from '../types';
+import {ExportedTileset, ColorArray, Coord, CoordArray, cornerDirections, cornerIndexOrder, Direction, directionIndexOrder, DirectionMap, Size } from '../types';
 import { getImageIndexFromCoord, midpoint, midpointPoints, pickRandom, rotatePoint } from '../utils';
-import { terrainTransitions, TerrainType } from '../World';
+import { terrainTransitions, TerrainType } from '../terrain';
 
+
+const ENABLE_TRANSITIONS = true;
+const ENABLE_FEATURES = true;
+const ENABLE_ROADS = true;
 
 function lighter(color: ColorArray, amount: number): ColorArray {
   return [
@@ -75,7 +78,6 @@ function drawHexTile(
 ) {
   const grid = new TileGrid(hexTile, width, height);
   const centerPoint: Coord = [32, 32 + OFFSET_Y];
-  let cellTypePoints = new Map();
 
   // replace template grid with correct cell types
   for (let x = 0; x < width; x++) {
@@ -144,153 +146,160 @@ function drawHexTile(
     }
   }
 
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      const cellType = grid.get(x, y);
-      if (cellType !== CellType.NONE && cellType !== CellType.DEBUG_CENTER) {
-        if (cellTypePoints.has(cellType)) {
-          cellTypePoints.get(cellType).push([x, y]);
-        } else {
-          cellTypePoints.set(cellType, [[x, y]]);
+  // terrain transitions
+  if (ENABLE_TRANSITIONS) {
+    let cellTypePoints = new Map();
+    for (let x = 0; x < width; x++) {
+      for (let y = 0; y < height; y++) {
+        const cellType = grid.get(x, y);
+        if (cellType !== CellType.NONE && cellType !== CellType.DEBUG_CENTER) {
+          if (cellTypePoints.has(cellType)) {
+            cellTypePoints.get(cellType).push([x, y]);
+          } else {
+            cellTypePoints.set(cellType, [[x, y]]);
+          }
         }
       }
     }
-  }
 
-  const isRiver = cellType => (
-    cellType === CellType.RIVER
-    || cellType === CellType.RIVER_MOUTH
-    || cellType === CellType.RIVER_SOURCE
-  );
-
-  // terrain transitions
-  for (let count = 1; count <= 4; count++) {
-    for (const cellType of renderOrder) {
-      const cells = cellTypePoints.get(cellType);
-      if (!cells) continue;
-      let newCells: CoordArray;
-      if (isRiver(cellType) && count >= 3) {
-        continue;
-      }
-      newCells = grid.expandNaturally(
-        cells,
-        value => value == CellType.DEBUG_CENTER,
-        cellType,
-        1,
-        isRiver(cellType) ? 0.85 : 0.70,
-      );
-      if (count === 4) {
-        grid.removeIslandNeighbors(
+    const isRiver = cellType => (
+      cellType === CellType.RIVER
+      || cellType === CellType.RIVER_MOUTH
+      || cellType === CellType.RIVER_SOURCE
+    );
+    for (let count = 1; count <= 4; count++) {
+      for (const cellType of renderOrder) {
+        const cells = cellTypePoints.get(cellType);
+        if (!cells) continue;
+        let newCells: CoordArray;
+        if (isRiver(cellType) && count >= 3) {
+          continue;
+        }
+        newCells = grid.expandNaturally(
           cells,
-          CellType.DEBUG_CENTER,
+          value => value == CellType.DEBUG_CENTER,
           cellType,
-          cellType,
+          1,
+          isRiver(cellType) ? 0.85 : 0.70,
         );
-        grid.removeIslandNeighbors(
-          cells,
-          cellType,
-          CellType.DEBUG_CENTER,
-          CellType.DEBUG_CENTER,
-        );
+        if (count === 4) {
+          grid.removeIslandNeighbors(
+            cells,
+            CellType.DEBUG_CENTER,
+            cellType,
+            cellType,
+          );
+          grid.removeIslandNeighbors(
+            cells,
+            cellType,
+            CellType.DEBUG_CENTER,
+            CellType.DEBUG_CENTER,
+          );
+        }
+        cellTypePoints.set(cellType, newCells);
       }
-      cellTypePoints.set(cellType, newCells);
     }
   }
 
   // roads
-  let roadCenter = centerPoint;
-  let roadPoints: CoordArray = [];
-  for (const direction of directionIndexOrder) {
-    if (hexTile.edgeRoads[direction]) {
-      roadPoints.push(edgeCenterPoints[direction]);
-    }
-  }
-  if (roadPoints.length > 1) {
-    roadCenter = midpointPoints(roadPoints);
-  }
-
-  const randomizePoint = (point: Coord, range: number): Coord => {
-    return [
-      point[0] + (Math.round((Math.random() - 0.5) * 5)),
-      point[1] + (Math.round((Math.random() - 0.5) * 5)),
-    ];
-  }
-  roadCenter = randomizePoint(roadCenter, 5);
-
-  let roadCells = [];
-  for (const direction of directionIndexOrder) {
-    if (hexTile.edgeRoads[direction]) {
-      const [x, y] = edgeCenterPoints[direction];
-      const center = randomizePoint(midpoint(roadCenter, [x, y]), 5);
-      const c1 = rotatePoint(
-        center,
-        roadCenter,
-        90,
-      );
-      const c2 = rotatePoint(
-        center,
-        roadCenter,
-        -90,
-      );
-      const cells = grid.getNoisyLine(
-        roadCenter,
-        [x, y],
-        c1,
-        c2,
-        CellType.ROAD,
-        3,
-        0.30
-      );
-      for (const [cx, cy] of cells) {
-        grid.set(cx, cy, CellType.ROAD);
-        roadCells.push([cx, cy]);
+  if (ENABLE_ROADS) {
+    let roadCenter = centerPoint;
+    let roadPoints: CoordArray = [];
+    for (const direction of directionIndexOrder) {
+      if (hexTile.edgeRoads[direction]) {
+        roadPoints.push(edgeCenterPoints[direction]);
       }
     }
+    if (roadPoints.length > 1) {
+      roadCenter = midpointPoints(roadPoints);
+
+      const randomizePoint = (point: Coord, range: number): Coord => {
+        return [
+          point[0] + (Math.round((Math.random() - 0.5) * 5)),
+          point[1] + (Math.round((Math.random() - 0.5) * 5)),
+        ];
+      }
+      roadCenter = randomizePoint(roadCenter, 5);
+    
+      let roadCells = [];
+      for (const direction of directionIndexOrder) {
+        if (hexTile.edgeRoads[direction]) {
+          const [x, y] = edgeCenterPoints[direction];
+          const center = randomizePoint(midpoint(roadCenter, [x, y]), 5);
+          const c1 = rotatePoint(
+            center,
+            roadCenter,
+            90,
+          );
+          const c2 = rotatePoint(
+            center,
+            roadCenter,
+            -90,
+          );
+          const cells = grid.getNoisyLine(
+            roadCenter,
+            [x, y],
+            c1,
+            c2,
+            CellType.ROAD,
+            3,
+            0.30
+          );
+          for (const [cx, cy] of cells) {
+            grid.set(cx, cy, CellType.ROAD);
+            roadCells.push([cx, cy]);
+          }
+        }
+      }
+      grid.expand(
+        roadCells,
+        value => value !== CellType.NONE,
+        CellType.ROAD,
+        1,
+      )
+    }
   }
-  grid.expand(
-    roadCells,
-    value => value !== CellType.NONE,
-    CellType.ROAD,
-    1,
-  )
 
   const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
   grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
 
+  const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
+
   // features
-  const features = ndarray(new Int8Array(width * height), [width, height]);
-  for (let fy = 0; fy < height; fy++) {
-    for (let fx = 0; fx < width; fx++) {
-      features.set(fx, fy, -1);
-    }
-  }
-  const poissonDisk = new FastPoissonDiskSampling({
-    shape: [width, height],
-    radius: 3,
-    tries: 10,
-  }, Math.random);
-  poissonDisk.fill();
-  const points = poissonDisk.getAllPoints() as CoordArray;
-  if (points.length > 0) {
-    for (const [x, y] of points) {
-      const cx = Math.round(x);
-      const cy = Math.round(y);
-      const cellType = grid.get(cx, cy);
-      if (
-        cellTypeFeatures[cellType]
-      ) {
-        const id = pickRandom(cellTypeFeatures[cellType])
-        features.set(cx, cy, id);
+  if (ENABLE_FEATURES) {
+    const features = ndarray(new Int8Array(width * height), [width, height]);
+    for (let fy = 0; fy < height; fy++) {
+      for (let fx = 0; fx < width; fx++) {
+        features.set(fx, fy, -1);
       }
     }
-  }
-  
-  const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
-  for (let fy = 0; fy < height; fy++) {
-    for (let fx = 0; fx < width; fx++) {
-      const featureID = features.get(fx, fy);
-      if (featureID >= 0) {
-        placeObject(autogenLayer, autogenObjects, featureID, [fx, fy]);
+    const poissonDisk = new FastPoissonDiskSampling({
+      shape: [width, height],
+      radius: 3,
+      tries: 10,
+    }, Math.random);
+    poissonDisk.fill();
+    const points = poissonDisk.getAllPoints() as CoordArray;
+    if (points.length > 0) {
+      for (const [x, y] of points) {
+        const cx = Math.round(x);
+        const cy = Math.round(y);
+        const cellType = grid.get(cx, cy);
+        if (
+          cellTypeFeatures[cellType]
+        ) {
+          const id = pickRandom(cellTypeFeatures[cellType])
+          features.set(cx, cy, id);
+        }
+      }
+    }
+    
+    for (let fy = 0; fy < height; fy++) {
+      for (let fx = 0; fx < width; fx++) {
+        const featureID = features.get(fx, fy);
+        if (featureID >= 0) {
+          placeObject(autogenLayer, autogenObjects, featureID, [fx, fy]);
+        }
       }
     }
   }
