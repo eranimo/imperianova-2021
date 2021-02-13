@@ -24,8 +24,8 @@ export const WorldViewer = ({
     const loader = new PIXI.Loader();
     loader.add('hexTemplate', require('./assets/hex-template.png'))
     loader.add('autogenObjectsPNG', require('./assets/autogen-objects.png'))
-    loader.add('autogenObjectsXML', require('file-loader!./assets/autogen-objects.xml'))
     loader.load(({ resources }) => {
+      const autogenObjectsXML = require('./assets/autogen-objects.xml');
       const size = worldMapRef.current.getBoundingClientRect();
       const app = new PIXI.Application({
         width: size.width,
@@ -36,11 +36,12 @@ export const WorldViewer = ({
       setLoading(false);
       app.resizeTo = worldMapRef.current;
       console.log('resources', resources);
+      console.log('autogenObjectsXML', autogenObjectsXML);
       const assets: Assets = {
         hexTemplate: resources.hexTemplate,
         autogenObjects: new Tileset<AutogenObjectTile>(
           resources.autogenObjectsPNG.texture,
-          resources.autogenObjectsXML.data,
+          autogenObjectsXML,
           data => ({
             size: parseInt(data.size, 10),
             terrainTypes: data.terrainTypes

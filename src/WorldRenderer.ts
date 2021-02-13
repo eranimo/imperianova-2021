@@ -2,7 +2,8 @@ import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
 import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
 import { Hex, terrainColors, terrainTransitions, TerrainType, World } from './World';
-import { WorldTileset, HexTile, OFFSET_Y } from './WorldTileset';
+import { WorldTileset } from './WorldTileset';
+import { HexTile, OFFSET_Y } from './hexTile';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;

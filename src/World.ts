@@ -1,5 +1,4 @@
-import * as PIXI from 'pixi.js';
-import { Size, Direction, oddq_directions, oppositeDirections, directionIndexOrder, adjacentDirections, DirectionMap, directionTitles } from './types';
+import { Size, Direction, oddq_directions, oppositeDirections, directionIndexOrder, adjacentDirections, DirectionMap, directionTitles, Coord } from './types';
 import ndarray from 'ndarray';
 import * as Honeycomb from 'honeycomb-grid';
 import { clamp } from 'lodash';
@@ -194,8 +193,8 @@ export class World {
     return this.hexgrid[this.indexMap.get(`${x},${y}`)] || null;
   }
 
-  getHexFromPoint(point: PIXI.Point) {
-    const hexCoords = GridFactory.pointToHex(point.x, point.y);
+  getHexFromPoint(point: Coord) {
+    const hexCoords = GridFactory.pointToHex(point[0], point[1]);
     return this.hexgrid.get(hexCoords);
   }
 
@@ -203,7 +202,7 @@ export class World {
     const hex = this.hexgrid.get({ x, y });
     if (!hex) return null;
     const p = hex.toPoint();
-    return new PIXI.Point(p.x, p.y);
+    return [p.x, p.y];
   }
 
   getHexCoordinate(hex: Hex) {

@@ -17,15 +17,11 @@
     ],
     "jsx": "react",
     "allowSyntheticDefaultImports": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "./typings/custom.d.ts",
-    ],
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "downlevelIteration": true
   },
-  "include": ["src", "scripts"],
+  "include": ["src", "scripts", "./typings/custom.d.ts"],
   "exclude": [
     "node_modules",
     "dist"

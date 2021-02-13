@@ -1,7 +1,7 @@
 import ndarray from 'ndarray';
 import { floodFill, plotLine, getPositionAlongTheLine, midpoint, bresenhamLinePlot, roundPoint } from './utils';
-import { HexTile, CellType } from './WorldTileset';
 import { Coord, CoordArray } from './types';
+import { CellType, HexTile } from './hexTile';
 
 export class TileGrid {
   public grid: ndarray;

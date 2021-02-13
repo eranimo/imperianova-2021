@@ -5,6 +5,19 @@ export type TilesetTile<T> =  {
   properties: T,
 }
 
+export type ExportedTileset = {
+  buffer: Uint8ClampedArray,
+  size: Size,
+  tiles: {
+    [tileID: number]: {
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    }
+  }
+}
+
 export class Tileset<T> {
   tileSize: Size;
   columns: number;
@@ -16,15 +29,14 @@ export class Tileset<T> {
 
   constructor(
     protected resourceTexture: PIXI.Texture,
-    protected def: XMLDocument,
+    protected def: any,
     parseTile: (rawTileData: { [name: string]: string }) => T,
   ) {
-    const tileset = def.children[0];
     this.tileSize = {
-      width: parseInt(tileset.attributes['tilewidth'].value, 10),
-      height: parseInt(tileset.attributes['tileheight'].value, 10),
+      width: parseInt(def.tileset.$.tilewidth, 10),
+      height: parseInt(def.tileset.$.tileheight, 10),
     };
-    this.columns = parseInt(tileset.attributes['columns'].value, 10);
+    this.columns = parseInt(def.tileset.$.columns, 10);
     this.baseTexture = resourceTexture.baseTexture;
 
     const templateImage = (resourceTexture.baseTexture.resource as any).source as HTMLImageElement;
@@ -38,28 +50,40 @@ export class Tileset<T> {
     this.tileFrame = new Map();
     this.tileTexture = new Map();
 
-    for (const childNode of Array.from(tileset.children)) {
-      if (childNode.nodeName === 'tile') {
-        const id = parseInt(childNode.id, 10);
-        let properties = {};
-        for (const prop of Array.from(childNode.children[0].children)) {
-          properties[prop.attributes['name'].value] = prop.attributes['value'].value;
-        }
-        const tile: TilesetTile<T> = {
-          id,
-          properties: parseTile(properties), 
-        };
-        this.tiles.set(id, tile);
-        const x = (id % this.columns) * this.tileSize.width;
-        const y = (Math.floor(id / this.columns)) * this.tileSize.height;
-        const frame = new PIXI.Rectangle(
-          x, y,
-          this.tileSize.width,
-          this.tileSize.height,
-        );
-        this.tileFrame.set(id, frame);
-        this.tileTexture.set(id, new PIXI.Texture(this.baseTexture, frame));
+    for (const tileDef of def.tileset.tile) {
+      const id = parseInt(tileDef.$.id, 10);
+      let properties = {};
+      for (const prop of tileDef.properties[0].property) {
+        properties[prop.$.name] = prop.$.value;
       }
+      const tile: TilesetTile<T> = {
+        id,
+        properties: parseTile(properties), 
+      };
+      this.tiles.set(id, tile);
+      const x = (id % this.columns) * this.tileSize.width;
+      const y = (Math.floor(id / this.columns)) * this.tileSize.height;
+      const frame = new PIXI.Rectangle(
+        x, y,
+        this.tileSize.width,
+        this.tileSize.height,
+      );
+      this.tileFrame.set(id, frame);
+      this.tileTexture.set(id, new PIXI.Texture(this.baseTexture, frame));
     }
+  }
+
+  export(): ExportedTileset {
+    const buffer = this.imageData.data;
+    const tiles = {};
+    for (const [tileID, frame] of this.tileFrame) {
+      tiles[tileID] = {
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+      };
+    }
+    return { buffer, tiles, size: { width: this.imageData.width, height: this.imageData.height } };
   }
 }
