@@ -10,7 +10,7 @@ import TileRendererWorker from 'worker-loader!./workers/tileRenderer.worker';
 import { reject } from 'lodash';
 
 
-const ENABLE_TILE_CACHE = true;
+const ENABLE_TILE_CACHE = false;
 const TILE_RENDERER_POOL_SIZE = 10;
 
 localForage.config({

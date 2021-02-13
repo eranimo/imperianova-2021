@@ -60,6 +60,9 @@ export const WorldViewer = ({
         worldHeight: 0,
         interaction: app.renderer.plugins.interaction,
       });
+      window.addEventListener('resize', () => {
+        viewport.resize(window.innerWidth, window.innerHeight);
+      });
       app.stage.addChild(viewport);
       viewport.drag().pinch().wheel().decelerate();
       
