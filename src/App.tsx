@@ -6,6 +6,7 @@ import { Direction } from './types';
 import { WorldGrid } from './WorldGrid';
 import Alea from 'alea';
 import { random, times } from 'lodash';
+import { AssetLoader } from './AssetLoader';
 
 
 enum WorldSize {
@@ -45,17 +46,28 @@ export const App = () => {
     setLoading(true);
     worldGen.generate();
     console.log('world', world);
-    const worldGrid = new WorldGrid(world);
-    worldGrid.buildGrid();
+    const onNewWorld = () => {
+      const worldGrid = new WorldGrid(world);
+      worldGrid.buildGrid();
 
-    // test data
-    console.time('setup test data');
-    testRoads(world, worldGrid);
-    console.timeEnd('setup test data');
+      // test data
+      console.time('setup test data');
+      testRoads(world, worldGrid);
+      console.timeEnd('setup test data');
 
-    worldRef.current = world;
-    console.log('done loading');
-    setLoading(false);
+      worldRef.current = world;
+      console.log('done loading');
+      setLoading(false);
+    };
+
+    onNewWorld();
+
+    (window as any).regenerate = () => {
+      worldGen.options.seed = Math.random();
+      setLoading(true);
+      worldGen.generate();
+      onNewWorld();
+    }
   }, []);
 
   if (isLoading) {
@@ -63,6 +75,8 @@ export const App = () => {
   }
 
   return (
-    <WorldViewer world={worldRef.current} />
+    <AssetLoader>
+      <WorldViewer world={worldRef.current} />
+    </AssetLoader>
   );
 }

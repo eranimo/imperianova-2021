@@ -1,10 +1,11 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
+import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
 import { Hex, World } from './World';
 import { terrainColors, terrainTransitions, TerrainType } from './terrain';
 import { WorldTileset } from './WorldTileset';
 import { HexTile, OFFSET_Y } from './hexTile';
+import { Assets } from './AssetLoader';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -66,8 +67,7 @@ export class WorldRenderer {
     }
 
     this.worldTileset.load().then(() => {
-      this.renderDebug();
-      this.render();
+      this.onNewWorld(world);
     });
 
     // setup events
@@ -76,6 +76,13 @@ export class WorldRenderer {
         this.debugGraphics.visible = !this.debugGraphics.visible;
       }
     });
+  }
+
+  onNewWorld(world: World) {
+    this.world = world;
+
+    this.renderDebug();
+    this.render();
   }
 
   private getChunkForCoordinate(x: number, y: number) {

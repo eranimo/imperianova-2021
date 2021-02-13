@@ -1,9 +1,10 @@
 import { World, Hex } from './World';
-import { Assets, ColorArray, Size, Coord, CornerMap } from './types';
+import { ColorArray, Size, Coord, CornerMap } from './types';
 import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
 import { terrainColors } from './terrain';
+import { Assets } from './AssetLoader';
 
 
 export class WorldMinimap {

@@ -16,11 +16,6 @@ export type AutogenObjectTile = {
   used: boolean,
 };
 
-export type Assets = {
-  hexTemplate: PIXI.LoaderResource,
-  autogenObjects: Tileset<AutogenObjectTile>,
-};
-
 export type ColorArray = [r: number, g: number, b: number];
 
 export enum Direction {

@@ -2,11 +2,12 @@ import localForage from 'localforage';
 import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
 import { CellType, cellTypeColor, cornerCellTypes, cornerSideCellTypes, directionCellTypes, getHexTileID, HexTile, OFFSET_Y } from './hexTile';
-import { Assets, ColorArray, cornerIndexOrder, directionIndexOrder, ExportedTileset } from './types';
+import { ColorArray, cornerIndexOrder, directionIndexOrder, ExportedTileset } from './types';
 import { colorArrayMatches, logGroupTime, logTime } from './utils';
 import { spawn, Pool, Worker } from 'threads';
 import TileRendererWorker from 'worker-loader!./workers/tileRenderer.worker';
 import { reject } from 'lodash';
+import { Assets } from './AssetLoader';
 
 
 const ENABLE_TILE_CACHE = false;
