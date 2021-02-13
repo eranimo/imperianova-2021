@@ -89,7 +89,7 @@ export const cellTypeColor: Partial<Record<CellType, ColorArray>> = {
   [CellType.DEBUG_NW]: [0, 0, 255],
   [CellType.DEBUG_SW]: [255, 255, 0],
   [CellType.DEBUG_S]: [0, 255, 0],
-  [CellType.DEBUG_CENTER]: [0, 0, 0],
+  [CellType.DEBUG_CENTER]: [69, 69, 69],
 
   [CellType.DEBUG_RIGHT]: [0, 125, 125],
   [CellType.DEBUG_BOTTOM_RIGHT]: [0, 0, 125],

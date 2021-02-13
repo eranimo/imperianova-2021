@@ -66,12 +66,13 @@ function placeObject(
 }
 
 function drawHexTile(
+  tileBuffer: SharedArrayBuffer,
   hexTile: HexTile,
   width: number,
   height: number,
   templateGrid: ndarray,
   autogenObjects: ExportedTileset,
-): Float32Array {
+) {
   const grid = new TileGrid(hexTile, width, height);
   const centerPoint: Coord = [32, 32 + OFFSET_Y];
   let cellTypePoints = new Map();
@@ -127,14 +128,6 @@ function drawHexTile(
       }
     }
   }
-
-  // flood fill center of tile
-  grid.floodFill(
-    Math.round(width / 2),
-    Math.round(height / 2),
-    CellType.DEBUG_CENTER,
-    value => value === 0,
-  );
 
   // draw a line from each river mouth cell to the center of the hex
   // to ensure rivers actually flow into the ocean
@@ -335,7 +328,7 @@ function drawHexTile(
 
 
   // convert to image
-  const buffer = new Float32Array(width * height * 4);
+  const buffer = new Float32Array(tileBuffer);
   let i = 0;
   const dim = 4;
   for (let y = 0; y < height; y++) {
@@ -367,10 +360,10 @@ function drawHexTile(
       i++;
     }
   }
-  return buffer;
 }
 
 expose(function renderWorker (
+  tileBuffer: SharedArrayBuffer,
   hexTile: HexTile,
   width: number,
   height: number,
@@ -379,9 +372,9 @@ expose(function renderWorker (
   autogenObjects: ExportedTileset,
 ) {
   const templateGrid = ndarray(new Uint8ClampedArray(templateGridBuffer), [templateGridSize.width, templateGridSize.height]);
-  let buffer: Float32Array;
   try {
-    buffer = drawHexTile(
+    drawHexTile(
+      tileBuffer,
       hexTile,
       width,
       height,
@@ -391,5 +384,5 @@ expose(function renderWorker (
   } catch (err) {
     console.error(err);
   }
-  return Transfer(buffer.buffer);
+  
 });

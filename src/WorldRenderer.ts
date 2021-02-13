@@ -220,10 +220,7 @@ export class WorldRenderer {
   }
 
   async render() {
-    console.time('drawHexTile');
-    
     this.worldTileset.updateTileset();
-    console.timeEnd('drawHexTile');
 
     console.groupCollapsed('draw chunks');
     console.time('draw chunks');
@@ -238,6 +235,7 @@ export class WorldRenderer {
       await this.drawChunk(chunkKey);
     }
     this.worldTileset.updateTileset();
+    this.worldTileset.saveTileStore();
     console.timeEnd('draw chunks');
     console.groupEnd();
 

@@ -10,8 +10,8 @@ import TileRendererWorker from 'worker-loader!./workers/tileRenderer.worker';
 import { reject } from 'lodash';
 
 
-const ENABLE_TILE_CACHE = false;
-const TILE_RENDERER_POOL_SIZE = 8;
+const ENABLE_TILE_CACHE = true;
+const TILE_RENDERER_POOL_SIZE = 10;
 
 localForage.config({
   driver: localForage.INDEXEDDB,
@@ -72,6 +72,10 @@ export class WorldTileset {
           imageData.data[index + 1],
           imageData.data[index + 2],
         ];
+
+        if (colorArrayMatches(cellTypeColor[CellType.DEBUG_CENTER], thisColor)) {
+          this.templateGrid.set(x, y, CellType.DEBUG_CENTER);
+        }
        
         for (const direction of directionIndexOrder) {
           const cellType = directionCellTypes[direction];
@@ -137,19 +141,24 @@ export class WorldTileset {
   }
 
   private async renderHexTile(hexTile: HexTile): Promise<Float32Array> {
+    const width = this.tileWidth;
+    const height = this.tileHeight + OFFSET_Y;
     return new Promise((resolve, reject) => {
       try {
+        const tileBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height * 4);
         this.tileRenderWorkerPool.queue(async worker => {
-          const tileBuffer: ArrayBuffer = await worker(
+          await worker(
+            tileBuffer,
             hexTile,
-            this.tileWidth,
-            this.tileHeight + OFFSET_Y,
+            width,
+            height,
             this.templateGridBuffer,
             { width: this.tileWidth, height: this.tileHeight },
             this.autogenObjectTilesetExport,
           );
-          // console.log('render worker returned', tileBuffer);
-          resolve(new Float32Array(tileBuffer));
+          const tileArray = new Float32Array(tileBuffer);
+          // console.log('render worker returned', tileArray);
+          resolve(tileArray);
         });
       } catch (err) {
         console.error(err);
@@ -227,7 +236,18 @@ export class WorldTileset {
   }
 
   public updateTileset() {
-    localForage.setItem('tileBufferStore', this.tileBufferStore);
     this.renderer.render(this.container, this.renderTexture);
+  }
+
+  public saveTileStore() {
+    console.time('save tile store');
+    const store = {};
+    for (const [key, buffer] of Object.entries(this.tileBufferStore)) {
+      const newBuffer = new Float32Array(buffer.length);
+      newBuffer.set(buffer, 0);
+      store[key] = newBuffer;
+    }
+    localForage.setItem('tileBufferStore', store);
+    console.timeEnd('save tile store');
   }
 }
