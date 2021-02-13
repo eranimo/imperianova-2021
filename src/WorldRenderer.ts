@@ -1,14 +1,16 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
+import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Direction, Corner } from './types';
 import { Hex, terrainColors, terrainTransitions, TerrainType, World } from './World';
-import { WorldTileset, HexTile, OFFSET_Y } from './WorldTileset';
+import { WorldTileset, OFFSET_Y } from './WorldTileset';
+import { HexTile } from './shared';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
 
 const DEBUG_RIVER_COLOR = 0x0000FF;
 const DEBUG_ROAD_COLOR = 0x80530b;
+
 
 export class WorldRenderer {
   public world: World;
@@ -131,27 +133,7 @@ export class WorldRenderer {
           (this.world.riverHexPairs.has(hexObj) && 
           this.world.riverHexPairs.get(hexObj).has(neighborOne))
         ) {
-          if (
-            (this.world.riverHexPairs.has(hexObj) && 
-            this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
-            !this.world.isLand(neighborOne)) ||
-            (this.world.riverHexPairs.has(hexObj) && 
-            this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
-            !this.world.isLand(neighborTwo))
-          ) {
-            cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
-          } else if (
-            (this.world.riverHexPairs.has(hexObj) && 
-            this.world.riverHexPairs.get(hexObj).has(neighborTwo) &&
-            this.world.isLand(neighborOne)) ||
-            (this.world.riverHexPairs.has(hexObj) && 
-            this.world.riverHexPairs.get(hexObj).has(neighborOne) &&
-            this.world.isLand(neighborTwo))
-          ) {
-            cornerTerrainTypes[corner] = TerrainType.RIVER_SOURCE;
-          } else {
-            cornerTerrainTypes[corner] = TerrainType.RIVER;
-          }
+          cornerTerrainTypes[corner] = TerrainType.RIVER;
         } else if (
           // river mouth / end
           this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)

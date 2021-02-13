@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./scripts",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es6",
+    "outDir": "dist",
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "downlevelIteration": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "exclude": [
+    "../node_modules"
+  ]
+}
