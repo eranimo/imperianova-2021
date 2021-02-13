@@ -61,7 +61,9 @@ export class WorldRenderer {
       }
     }
 
-    this.render();
+    this.worldTileset.load().then(() => {
+      this.render();
+    });
 
     // setup events
     document.addEventListener('keyup', event => {
@@ -78,7 +80,8 @@ export class WorldRenderer {
     return { chunkX, chunkY };
   }
 
-  private drawChunk(chunkKey: string) {
+  private async drawChunk(chunkKey: string) {
+    // console.log('draw chunk', chunkKey);
     const [terrainLayer] = this.chunkTileLayers.get(chunkKey);
     const hexes = this.chunkHexes.get(chunkKey);
     const hexPosititions: [number, number][] = [];
@@ -92,6 +95,8 @@ export class WorldRenderer {
     }
     // TODO: why casting is required
     (terrainLayer as any).position.set((minX), (minY));
+
+    const hexPromises: Promise<number>[] = [];
 
     hexes.forEach((hex, index) => {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
@@ -196,7 +201,8 @@ export class WorldRenderer {
         cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
         edgeRoads: edgeRoads as DirectionMap<boolean>,
       };
-      const hexTileID = this.worldTileset.getTile(hexTile);
+      hexPromises.push(this.worldTileset.getTile(hexTile));
+      const hexTileID = this.worldTileset.getTileID(hexTile);
       const texture = this.worldTileset.getTextureForID(hexTileID);
       const [ x, y ] = hexPosititions[index];
       if (texture) {
@@ -208,9 +214,11 @@ export class WorldRenderer {
       }
       this.hexTiles.set(hexObj, hexTile);
     });
+
+    await Promise.all(hexPromises);
   }
 
-  render() {
+  async render() {
     console.time('drawHexTile');
     
     this.worldTileset.updateTileset();
@@ -226,7 +234,7 @@ export class WorldRenderer {
       const terrainLayer = new CompositeRectTileLayer(0, bitmaps);
       this.chunkTileLayers.set(chunkKey, [terrainLayer]);
       this.chunksLayer.addChild(terrainLayer as any);
-      this.drawChunk(chunkKey);
+      await this.drawChunk(chunkKey);
     }
     this.worldTileset.updateTileset();
     console.timeEnd('draw chunks');

@@ -38,6 +38,7 @@
     "fast-2d-poisson-disk-sampling": "^1.0.1",
     "honeycomb-grid": "^3.1.7",
     "jimp": "^0.16.1",
+    "localforage": "^1.9.0",
     "lodash": "^4.17.20",
     "ndarray": "^1.0.19",
     "ngraph.graph": "^19.1.0",

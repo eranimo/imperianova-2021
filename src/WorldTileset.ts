@@ -8,6 +8,13 @@ import FastPoissonDiskSampling from 'fast-2d-poisson-disk-sampling';
 import { Tileset } from './Tileset';
 import SimplexNoise from 'simplex-noise';
 import { clamp, range } from 'lodash';
+import localForage from 'localforage';
+
+
+localForage.config({
+  driver: localForage.INDEXEDDB,
+  name: 'tileStore',
+});
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -293,7 +300,7 @@ function drawHexTile(
   height: number,
   templateGrid: ndarray,
   autogenObjects: Tileset<AutogenObjectTile>,
-): PIXI.Texture {
+): Float32Array {
   const grid = new TileGrid(hexTile, width, height);
   const centerPoint: Coord = [32, 32 + OFFSET_Y];
   let cellTypePoints = new Map();
@@ -589,8 +596,7 @@ function drawHexTile(
       i++;
     }
   }
-
-  return PIXI.Texture.fromBuffer(buffer, width, height);
+  return buffer;
 }
 
 export class WorldTileset {
@@ -601,6 +607,7 @@ export class WorldTileset {
   private hexTileSprite: Map<number, PIXI.Sprite>;
   private hexTileTexture: Map<number, PIXI.Texture>;
   private tileIDToIndex: Map<number, number>;
+  tileBufferStore: { [tileID: number]: Float32Array };
   public numTiles: number;
   templateGrid: ndarray;
 
@@ -622,6 +629,7 @@ export class WorldTileset {
     })
     this.renderTexture = new PIXI.RenderTexture(rt);
     this.tileIDToIndex = new Map();
+    this.tileBufferStore = {};
     this.numTiles = 0;
 
     // generate template grid buffer
@@ -670,6 +678,10 @@ export class WorldTileset {
     console.log('template grid', this.templateGrid);
   }
 
+  async load() {
+    this.tileBufferStore = (await localForage.getItem('tileBufferStore')) || {};
+  }
+
   static COLUMNS = 200;
   static PADDING = 10;
   static MAX_TILES = 20_000;
@@ -703,20 +715,26 @@ export class WorldTileset {
    * @param hexTile HexTile
    * @returns HexTile ID
    */
-  private generateTile(hexTile: HexTile): number {
+  private async generateTile(hexTile: HexTile): Promise<number> {
     // console.log('generating', hexTile);
     const id = getHexTileID(hexTile);
     const index = this.numTiles;
     this.numTiles++;
     this.tileIDToIndex.set(id, index);
     // console.time(`generating hex ID ${id}`);
-    const texture = drawHexTile(
-      hexTile,
-      this.tileWidth,
-      this.tileHeight + OFFSET_Y,
-      this.templateGrid,
-      this.assets.autogenObjects,
-    );
+    let tileBuffer = this.tileBufferStore[id];
+    if (!tileBuffer) {
+      tileBuffer = drawHexTile(
+        hexTile,
+        this.tileWidth,
+        this.tileHeight + OFFSET_Y,
+        this.templateGrid,
+        this.assets.autogenObjects,
+      );
+      this.tileBufferStore[id] = tileBuffer;
+    }
+
+    const texture = PIXI.Texture.fromBuffer(tileBuffer, this.tileWidth, this.tileHeight + OFFSET_Y);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
     sprite.position.set(
@@ -734,12 +752,16 @@ export class WorldTileset {
    * @param hexTile HexTile
    * @returns HexTile ID
    */
-  public getTile(hexTile: HexTile): number {
+  public async getTile(hexTile: HexTile): Promise<number> {
     const id = getHexTileID(hexTile);
     if (!this.hexTileMap.has(id)) {
       return this.generateTile(hexTile);
     }
     return id;
+  }
+
+  getTileID(hexTile: HexTile) {
+    return getHexTileID(hexTile);
   }
 
   /**
@@ -763,6 +785,7 @@ export class WorldTileset {
   }
 
   public updateTileset() {
+    localForage.setItem('tileBufferStore', this.tileBufferStore);
     this.renderer.render(this.container, this.renderTexture);
   }
 }
