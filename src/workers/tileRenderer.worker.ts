@@ -52,11 +52,11 @@ function placeObject(
   for (let y = ty; y < (ty + height); y++) {
     for (let x = tx; x < (tx + width); x++) {
       const index = getImageIndexFromCoord([x, y], autogenObjects.size.width);
-      const r = autogenObjects.buffer[index] / 255;
-      const g = autogenObjects.buffer[index + 1] / 255;
-      const b = autogenObjects.buffer[index + 2] / 255;
       const a = autogenObjects.buffer[index + 3] / 255;
       if (a > 0) {
+        const r = autogenObjects.buffer[index] / 255;
+        const g = autogenObjects.buffer[index + 1] / 255;
+        const b = autogenObjects.buffer[index + 2] / 255;
         const ax = ((x - tx) + pos[0]) - 7;
         const ay = ((y - ty) + pos[1]) - 14;
         autogenLayer.set(ax, ay, 0, r);
@@ -67,6 +67,8 @@ function placeObject(
     }
   }
 }
+
+let poissonPoints;
 
 function drawHexTile(
   tileBuffer: SharedArrayBuffer,
@@ -268,18 +270,22 @@ function drawHexTile(
   // features
   if (ENABLE_FEATURES) {
     const features = ndarray(new Int8Array(width * height), [width, height]);
-    for (let fy = 0; fy < height; fy++) {
-      for (let fx = 0; fx < width; fx++) {
-        features.set(fx, fy, -1);
-      }
+    features.data.fill(-1);
+
+    // TODO: generate more than 1 set of poisson disk sampling
+    let points;
+    if (!poissonPoints) {
+      const poissonDisk = new FastPoissonDiskSampling({
+        shape: [width, height],
+        radius: 3,
+        tries: 10,
+      }, Math.random);
+      poissonDisk.fill();
+      points = poissonDisk.getAllPoints() as CoordArray;
+      poissonPoints = points;
+    } else {
+      points = poissonPoints;
     }
-    const poissonDisk = new FastPoissonDiskSampling({
-      shape: [width, height],
-      radius: 3,
-      tries: 10,
-    }, Math.random);
-    poissonDisk.fill();
-    const points = poissonDisk.getAllPoints() as CoordArray;
     if (points.length > 0) {
       for (const [x, y] of points) {
         const cx = Math.round(x);
@@ -303,38 +309,6 @@ function drawHexTile(
       }
     }
   }
-
-  // const MAX_HILL_HEIGHT = 10;
-  // const HILL_NOISE_SCALE = 10;
-  // const heightMap = ndarray(new Uint8ClampedArray(width * height), [width, height]);
-  // const noise = new SimplexNoise();
-  // for (let y = 0; y < height; y++) {
-  //   for (let x = 0; x < width; x++) {
-  //     if (grid.get(x, y) === CellType.SAND) {
-  //       const curve = 1 - clamp(distance(centerPoint, [x, y]) / 28, 0, 1);
-  //       const v = (noise.noise2D(x / HILL_NOISE_SCALE, y / HILL_NOISE_SCALE) + 1) / 2;
-  //       heightMap.set(x, y, Math.max(0, Math.round(curve * v * MAX_HILL_HEIGHT)) - 2);
-  //     }
-  //   }
-  // }
-  
-  // for (let y = OFFSET_Y; y < height; y++) {
-  //   for (let x = 0; x < width; x++) {
-  //     const height = heightMap.get(x, y)
-  //     if (height > 0) {
-  //       for (let h = 0; h < height; h++) {
-  //         const yy = y - h;
-  //         const v = 1 + ((height / MAX_HILL_HEIGHT) * 0.5);
-  //         const [r, g, b] = lighter(cellTypeColor[centerCellType], v);
-  //         autogenLayer.set(x, yy, 0, r / 255);
-  //         autogenLayer.set(x, yy, 1, g / 255);
-  //         autogenLayer.set(x, yy, 2, b / 255);
-  //         autogenLayer.set(x, yy, 3, 1);
-  //       }
-  //     }
-  //   }
-  // }
-
 
   // convert to image
   const buffer = new Float32Array(tileBuffer);

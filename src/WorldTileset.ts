@@ -12,6 +12,7 @@ import { Assets } from './AssetLoader';
 
 const ENABLE_TILE_CACHE = false;
 const TILE_RENDERER_POOL_SIZE = navigator.hardwareConcurrency;
+const TILE_RENDERER_CONCURRENCY = 1;
 
 localForage.config({
   driver: localForage.INDEXEDDB,
@@ -58,7 +59,7 @@ export class WorldTileset {
       {
         size: TILE_RENDERER_POOL_SIZE,
         name: 'tileRenderer worker',
-        // concurrency: 1000,
+        concurrency: TILE_RENDERER_CONCURRENCY,
       }
     );
 
