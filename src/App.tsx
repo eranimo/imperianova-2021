@@ -36,17 +36,14 @@ function testRoads(world: World, worldGrid: WorldGrid) {
   console.groupEnd();
 }
 
+const worldGen = new WorldGenerator();
+
 export const App = () => {
-  const [isLoading, setLoading] = useState(true);
-  const worldRef = useRef<World>();
+  const [worldRef, setWorld] = useState<World>();
 
   useEffect(() => {
-    const world = new World();
-    const worldGen = new WorldGenerator(world, options);
-    setLoading(true);
-    worldGen.generate();
-    console.log('world', world);
-    const onNewWorld = () => {
+    const onNewWorld = (world) => {
+      console.log('world', world);
       const worldGrid = new WorldGrid(world);
       worldGrid.buildGrid();
 
@@ -55,28 +52,23 @@ export const App = () => {
       testRoads(world, worldGrid);
       console.timeEnd('setup test data');
 
-      worldRef.current = world;
+      setWorld(world);
       console.log('done loading');
-      setLoading(false);
     };
-
-    onNewWorld();
+    onNewWorld(worldGen.generate(options));
 
     (window as any).regenerate = () => {
-      worldGen.options.seed = Math.random();
-      setLoading(true);
-      worldGen.generate();
-      onNewWorld();
+      const world = worldGen.generate({
+        ...options,
+        seed: Math.random(),
+      });
+      onNewWorld(world);
     }
   }, []);
 
-  if (isLoading) {
-    return <>Loading...</>;
-  }
-
   return (
     <AssetLoader>
-      <WorldViewer world={worldRef.current} />
+      <WorldViewer world={worldRef} />
     </AssetLoader>
   );
 }

@@ -10,7 +10,7 @@ import { reject } from 'lodash';
 import { Assets } from './AssetLoader';
 
 
-const ENABLE_TILE_CACHE = false;
+const ENABLE_TILE_CACHE = true;
 const TILE_RENDERER_POOL_SIZE = navigator.hardwareConcurrency;
 const TILE_RENDERER_CONCURRENCY = 1;
 

@@ -6,74 +6,68 @@ import { AutogenObjectTile } from './types';
 import { GridFactory, World } from './World';
 import { WorldMinimap } from './WorldMinimap';
 import { WorldRenderer } from './WorldRenderer';
-import { AssetContext } from './AssetLoader';
+import { AssetContext, Assets } from './AssetLoader';
 
-export const WorldViewer = ({
-  world,
-}: {
-  world: World,
-}) => {
-  const worldMapRef = useRef<HTMLCanvasElement>();
-  const minimapRef = useRef<HTMLCanvasElement>();
-  const [isLoading, setLoading] = useState(true);
-  const { isLoading: isAssetsLoading, assets } = useContext(AssetContext);
+class WorldManager {
+  viewport$: BehaviorSubject<Viewport>;
+  app: PIXI.Application;
+  viewport: Viewport;
 
-  useEffect(() => {
-    console.log('WorldViewer', world);
-    if (!assets) return;
-    console.log('assets', assets);
-    
-    const size = worldMapRef.current.getBoundingClientRect();
-    const app = new PIXI.Application({
+  constructor(
+    private worldMapCanvas: HTMLCanvasElement,
+    private minimapCanvas: HTMLCanvasElement,
+  ) {
+    const size = worldMapCanvas.getBoundingClientRect();
+    this.app = new PIXI.Application({
       width: size.width,
       height: size.height,
       antialias: false,
-      view: worldMapRef.current,
+      view: worldMapCanvas,
     });
-    setLoading(false);
-    app.resizeTo = worldMapRef.current;
+    this.app.resizeTo = worldMapCanvas;
 
-    const viewport = new Viewport({
+    this.viewport = new Viewport({
       screenWidth: window.innerWidth,
       screenHeight: window.innerHeight,
       worldWidth: 0,
       worldHeight: 0,
-      interaction: app.renderer.plugins.interaction,
+      interaction: this.app.renderer.plugins.interaction,
     });
     window.addEventListener('resize', () => {
-      viewport.resize(window.innerWidth, window.innerHeight);
+      this.viewport.resize(window.innerWidth, window.innerHeight);
     });
-    app.stage.addChild(viewport);
-    viewport.drag().pinch().wheel().decelerate();
+    this.app.stage.addChild(this.viewport);
+    this.viewport.drag().pinch().wheel().decelerate();
     
-    const viewport$ = new BehaviorSubject<Viewport>(viewport);
-    viewport.on('moved', (event) => {
-      viewport$.next(event.viewport);
+    this.viewport$ = new BehaviorSubject<Viewport>(this.viewport);
+    this.viewport.on('moved', (event) => {
+      this.viewport$.next(event.viewport);
     });
-    
+  }
+
+  init(world: World, assets: Assets) {
     // render
-    const renderer = new WorldRenderer(app, world, assets);
-    viewport.worldWidth = renderer.worldWidth;
-    viewport.worldHeight = renderer.worldHeight;
-    viewport.addChild(renderer.chunksLayer);
-    viewport.addChild(renderer.debugGraphics);
+    const renderer = new WorldRenderer(this.app, world, assets);
+    this.viewport.removeChildren();
+    this.viewport.worldWidth = renderer.worldWidth;
+    this.viewport.worldHeight = renderer.worldHeight;
+    this.viewport.addChild(renderer.chunksLayer);
+    this.viewport.addChild(renderer.debugGraphics);
 
-
-    const minimapSize = minimapRef.current.getBoundingClientRect();
+    const minimapSize = this.minimapCanvas.getBoundingClientRect();
     const minimapApp = new PIXI.Application({
       width: minimapSize.width,
       height: minimapSize.height,
       antialias: false,
-      view: minimapRef.current,
+      view: this.minimapCanvas,
     });
-    setLoading(false);
-    const minimap = new WorldMinimap(minimapApp, world, assets, { width: minimapSize.width, height: minimapSize.height }, viewport$);
+    const minimap = new WorldMinimap(minimapApp, world, assets, { width: minimapSize.width, height: minimapSize.height }, this.viewport$);
     minimap.minimapPan.subscribe(point => {
-      viewport.moveCenter(point);
-      viewport$.next(viewport);
+      this.viewport.moveCenter(point);
+      this.viewport$.next(this.viewport);
     });
 
-    viewport.on('clicked', (event) => {
+    this.viewport.on('clicked', (event) => {
       const hexPosition = GridFactory.pointToHex(event.world);
       const hex = world.getHex(hexPosition.x, hexPosition.y);
       console.log('clicked on hex', hex);
@@ -87,9 +81,33 @@ export const WorldViewer = ({
     (window as any).moveToHex = (x: number, y: number) => {
       const hex = world.hexgrid.get({ x, y });
       const point = hex.toPoint();
-      viewport.moveCenter(new PIXI.Point(point.x, point.y));
+      this.viewport.moveCenter(new PIXI.Point(point.x, point.y));
     }
-    console.log({ app, viewport, world, renderer });
+  }
+}
+
+export const WorldViewer = ({
+  world,
+}: {
+  world: World,
+}) => {
+  const worldMapRef = useRef<HTMLCanvasElement>();
+  const minimapRef = useRef<HTMLCanvasElement>();
+  const [isLoading, setLoading] = useState(true);
+  const { isLoading: isAssetsLoading, assets } = useContext(AssetContext);
+
+  const manager = useRef<WorldManager>();
+
+  useEffect(() => {
+    console.log('setup world manager');
+    manager.current = new WorldManager(worldMapRef.current, minimapRef.current)    ;
+  }, []);
+
+  useEffect(() => {
+    if (world && assets && manager.current) {
+      console.log('setup world');
+      manager.current.init(world, assets);
+    }
   }, [world, assets]);
 
   return (
