@@ -96,9 +96,9 @@ export class WorldMinimap {
     updateFrame(viewport$.value);
     frame.filters = [new GlowFilter({
       color: 0xFFFFFF,
-      distance: devicePixelRatio,
-      outerStrength: devicePixelRatio,
-      innerStrength: devicePixelRatio,
+      distance: 2,
+      outerStrength: 2,
+      innerStrength: 2,
       knockout: true,
     })];
 
