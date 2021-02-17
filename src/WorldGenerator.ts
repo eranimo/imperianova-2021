@@ -7,7 +7,8 @@ import SimplexNoise from 'simplex-noise';
 import { MultiDictionary, Queue } from 'typescript-collections';
 import { adjacentDirections, Direction, directionIndexOrder, DirectionMap, oppositeDirections, Size } from './types';
 import { logGroupTime, octaveNoise } from './utils';
-import { Edge, Hex, World, GridFactory, TerrainType, terrainTypeTitles } from './World';
+import { Edge, Hex, World, GridFactory } from './World';
+import { TerrainType } from './terrain';
 
 
 export type WorldGeneratorOptions = {
@@ -19,24 +20,25 @@ export type WorldGeneratorOptions = {
 export class WorldGenerator {
   size: Size;
   seed: number;
+  world: World;
+  options: WorldGeneratorOptions;
 
-  constructor(
-    public world: World,
-    public options: WorldGeneratorOptions
+  @logGroupTime('generate', true)
+  generate(
+    options: WorldGeneratorOptions
   ) {
-    world.setWorldSize(options.size);
+    this.world = new World();
+    this.options = options;
+    this.world.setWorldSize(options.size);
     const gridSize = {
       width: options.size * 2,
       height: options.size,
     };
     this.size = gridSize;
     this.seed = options.seed;
-  }
-
-  @logGroupTime('generate', true)
-  generate() {
     this.generateTerrain();
     this.generateRivers();
+    return this.world;
   }
 
   @logGroupTime('generateTerrain')

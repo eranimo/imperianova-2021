@@ -1,8 +1,10 @@
-import { World, terrainColors, Hex } from './World';
-import { Assets, ColorArray, Size, Coord, CornerMap } from './types';
+import { World, Hex } from './World';
+import { ColorArray, Size, Coord, CornerMap } from './types';
 import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
+import { terrainColors } from './terrain';
+import { Assets } from './AssetLoader';
 
 
 export class WorldMinimap {
@@ -94,9 +96,9 @@ export class WorldMinimap {
     updateFrame(viewport$.value);
     frame.filters = [new GlowFilter({
       color: 0xFFFFFF,
-      distance: devicePixelRatio,
-      outerStrength: devicePixelRatio,
-      innerStrength: devicePixelRatio,
+      distance: 2,
+      outerStrength: 2,
+      innerStrength: 2,
       knockout: true,
     })];
 

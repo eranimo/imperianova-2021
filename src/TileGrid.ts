@@ -1,7 +1,7 @@
 import ndarray from 'ndarray';
 import { floodFill, plotLine, getPositionAlongTheLine, midpoint, bresenhamLinePlot, roundPoint } from './utils';
-import { HexTile, CellType } from './WorldTileset';
 import { Coord, CoordArray } from './types';
+import { CellType, HexTile } from './hexTile';
 
 export class TileGrid {
   public grid: ndarray;
@@ -281,8 +281,8 @@ export class TileGrid {
 
   replaceAll(fromCellType: CellType, toCellType: CellType) {
     this.forEachCell((x, y) => {
-      if (this.get(x, y) === fromCellType) {
-        this.set(x, y, toCellType);
+      if (this.grid.get(x, y) === fromCellType) {
+        this.grid.set(x, y, toCellType);
       }
     });
   }

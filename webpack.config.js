@@ -2,7 +2,6 @@ const path = require("path");
 var HtmlWebpackPlugin = require("html-webpack-plugin");
 var webpack = require("webpack");
 const ForkTsCheckerWebpackPlugin = require("fork-ts-checker-webpack-plugin");
-const ThreadsPlugin = require('threads-plugin');
 
 module.exports = {
   entry: {
@@ -18,7 +17,21 @@ module.exports = {
         options: {
           transpileOnly: true,
           experimentalWatchApi: true,
+          compilerOptions: {
+            module: 'esnext',
+          }
         },
+      },
+      {
+        test: /\.worker\.(c|m)?js$/i,
+        loader: "worker-loader",
+        options: {
+          filename: "[name].[contenthash].worker.js",
+        },
+      },
+      {
+        test: /\.xml$/,
+        use: ['xml-loader']
       },
       {
         test: /\.css$/,
@@ -26,10 +39,7 @@ module.exports = {
       },
       {
         test: /\.(png|svg|jpg|gif)$/,
-        loader: "file-loader",
-        options: {
-          name: '[path][name].[ext]',
-        },
+        type: 'asset/inline'
       },
       {
         test: /\.(woff|woff2|eot|ttf|otf)$/,
@@ -76,10 +86,7 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: "./src/index.html",
     }),
-    new ForkTsCheckerWebpackPlugin({
-      reportFiles: ["src/**/*.{ts,tsx}"],
-    }),
-    new ThreadsPlugin(),
+    new ForkTsCheckerWebpackPlugin(),
   ],
   devServer: {
     compress: true,

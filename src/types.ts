@@ -1,5 +1,5 @@
 import { Tileset } from "./Tileset";
-import { TerrainType } from './World';
+import { TerrainType } from './terrain';
 
 export type Size = {
   width: number;
@@ -14,11 +14,6 @@ export type AutogenObjectTile = {
   size: number,
   terrainTypes: TerrainType[],
   used: boolean,
-};
-
-export type Assets = {
-  hexTemplate: PIXI.LoaderResource,
-  autogenObjects: Tileset<AutogenObjectTile>,
 };
 
 export type ColorArray = [r: number, g: number, b: number];
@@ -146,3 +141,16 @@ export const cornerIndexOrder = [
   Corner.TOP_LEFT,
   Corner.TOP_RIGHT,
 ];
+
+export type ExportedTileset = {
+  buffer: Uint8ClampedArray,
+  size: Size,
+  tiles: {
+    [tileID: number]: {
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+    }
+  }
+}

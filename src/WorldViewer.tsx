@@ -1,13 +1,90 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { World, GridFactory } from './World';
-import { Assets, AutogenObjectTile } from './types';
 import { Viewport } from 'pixi-viewport';
-import { WorldGenerator } from './WorldGenerator';
-import { WorldRenderer } from './WorldRenderer';
-import { WorldMinimap } from './WorldMinimap';
-import { BehaviorSubject, Subject } from 'rxjs';
-import { Grid } from 'honeycomb-grid';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { BehaviorSubject } from 'rxjs';
 import { Tileset } from './Tileset';
+import { AutogenObjectTile } from './types';
+import { GridFactory, World } from './World';
+import { WorldMinimap } from './WorldMinimap';
+import { WorldRenderer } from './WorldRenderer';
+import { AssetContext, Assets } from './AssetLoader';
+
+class WorldManager {
+  viewport$: BehaviorSubject<Viewport>;
+  app: PIXI.Application;
+  viewport: Viewport;
+
+  constructor(
+    private worldMapCanvas: HTMLCanvasElement,
+    private minimapCanvas: HTMLCanvasElement,
+  ) {
+    const size = worldMapCanvas.getBoundingClientRect();
+    this.app = new PIXI.Application({
+      width: size.width,
+      height: size.height,
+      antialias: false,
+      view: worldMapCanvas,
+    });
+    this.app.resizeTo = worldMapCanvas;
+
+    this.viewport = new Viewport({
+      screenWidth: window.innerWidth,
+      screenHeight: window.innerHeight,
+      worldWidth: 0,
+      worldHeight: 0,
+      interaction: this.app.renderer.plugins.interaction,
+    });
+    window.addEventListener('resize', () => {
+      this.viewport.resize(window.innerWidth, window.innerHeight);
+    });
+    this.app.stage.addChild(this.viewport);
+    this.viewport.drag().pinch().wheel().decelerate();
+    
+    this.viewport$ = new BehaviorSubject<Viewport>(this.viewport);
+    this.viewport.on('moved', (event) => {
+      this.viewport$.next(event.viewport);
+    });
+  }
+
+  init(world: World, assets: Assets) {
+    // render
+    const renderer = new WorldRenderer(this.app, world, assets);
+    this.viewport.removeChildren();
+    this.viewport.worldWidth = renderer.worldWidth;
+    this.viewport.worldHeight = renderer.worldHeight;
+    this.viewport.addChild(renderer.chunksLayer);
+    this.viewport.addChild(renderer.debugGraphics);
+
+    const minimapSize = this.minimapCanvas.getBoundingClientRect();
+    const minimapApp = new PIXI.Application({
+      width: minimapSize.width,
+      height: minimapSize.height,
+      antialias: false,
+      view: this.minimapCanvas,
+    });
+    const minimap = new WorldMinimap(minimapApp, world, assets, { width: minimapSize.width, height: minimapSize.height }, this.viewport$);
+    minimap.minimapPan.subscribe(point => {
+      this.viewport.moveCenter(point);
+      this.viewport$.next(this.viewport);
+    });
+
+    this.viewport.on('clicked', (event) => {
+      const hexPosition = GridFactory.pointToHex(event.world);
+      const hex = world.getHex(hexPosition.x, hexPosition.y);
+      console.log('clicked on hex', hex);
+      console.log({
+        hexRoads: world.hexRoads.get(hex),
+        hexRivers: world.riverHexPairs.get(hex),
+        hexTile: renderer.hexTiles.get(hex),
+      });
+    });
+
+    (window as any).moveToHex = (x: number, y: number) => {
+      const hex = world.hexgrid.get({ x, y });
+      const point = hex.toPoint();
+      this.viewport.moveCenter(new PIXI.Point(point.x, point.y));
+    }
+  }
+}
 
 export const WorldViewer = ({
   world,
@@ -17,97 +94,21 @@ export const WorldViewer = ({
   const worldMapRef = useRef<HTMLCanvasElement>();
   const minimapRef = useRef<HTMLCanvasElement>();
   const [isLoading, setLoading] = useState(true);
+  const { isLoading: isAssetsLoading, assets } = useContext(AssetContext);
+
+  const manager = useRef<WorldManager>();
 
   useEffect(() => {
-    console.log(world);
-    
-    const loader = new PIXI.Loader();
-    loader.add('hexTemplate', require('./assets/hex-template.png'))
-    loader.add('autogenObjectsPNG', require('./assets/autogen-objects.png'))
-    loader.add('autogenObjectsXML', require('file-loader!./assets/autogen-objects.xml'))
-    loader.load(({ resources }) => {
-      const size = worldMapRef.current.getBoundingClientRect();
-      const app = new PIXI.Application({
-        width: size.width,
-        height: size.height,
-        antialias: false,
-        view: worldMapRef.current,
-      });
-      setLoading(false);
-      app.resizeTo = worldMapRef.current;
-      console.log('resources', resources);
-      const assets: Assets = {
-        hexTemplate: resources.hexTemplate,
-        autogenObjects: new Tileset<AutogenObjectTile>(
-          resources.autogenObjectsPNG.texture,
-          resources.autogenObjectsXML.data,
-          data => ({
-            size: parseInt(data.size, 10),
-            terrainTypes: data.terrainTypes
-              ? data.terrainTypes.split(',').map(t => parseInt(t, 10))
-              : [],
-            used: data.used === 'true',
-          })
-        ),
-      };
-      console.log('assets', assets);
+    console.log('setup world manager');
+    manager.current = new WorldManager(worldMapRef.current, minimapRef.current)    ;
+  }, []);
 
-      const viewport = new Viewport({
-        screenWidth: window.innerWidth,
-        screenHeight: window.innerHeight,
-        worldWidth: 0,
-        worldHeight: 0,
-        interaction: app.renderer.plugins.interaction,
-      });
-      app.stage.addChild(viewport);
-      viewport.drag().pinch().wheel().decelerate();
-      
-      const viewport$ = new BehaviorSubject<Viewport>(viewport);
-      viewport.on('moved', (event) => {
-        viewport$.next(event.viewport);
-      });
-      
-      // render
-      const renderer = new WorldRenderer(app, world, assets);
-      viewport.worldWidth = renderer.worldWidth;
-      viewport.worldHeight = renderer.worldHeight;
-      viewport.addChild(renderer.chunksLayer);
-      viewport.addChild(renderer.debugGraphics);
-
-
-      const minimapSize = minimapRef.current.getBoundingClientRect();
-      const minimapApp = new PIXI.Application({
-        width: minimapSize.width,
-        height: minimapSize.height,
-        antialias: false,
-        view: minimapRef.current,
-      });
-      setLoading(false);
-      const minimap = new WorldMinimap(minimapApp, world, assets, { width: minimapSize.width, height: minimapSize.height }, viewport$);
-      minimap.minimapPan.subscribe(point => {
-        viewport.moveCenter(point);
-        viewport$.next(viewport);
-      });
-
-      viewport.on('clicked', (event) => {
-        const hexPosition = GridFactory.pointToHex(event.world);
-        const hex = world.getHex(hexPosition.x, hexPosition.y);
-        console.log('clicked on hex', hex);
-        console.log({
-          hexRoads: world.hexRoads.get(hex),
-          hexRivers: world.riverHexPairs.get(hex),
-          hexTile: renderer.hexTiles.get(hex),
-        });
-      });
-
-      (window as any).moveToHex = (x: number, y: number) => {
-        const hex = world.hexgrid.get({ x, y });
-        const point = hex.toPoint();
-        viewport.moveCenter(new PIXI.Point(point.x, point.y));
-      }
-      console.log({ app, viewport, world, renderer });
-    });
-  }, [world]);
+  useEffect(() => {
+    if (world && assets && manager.current) {
+      console.log('setup world');
+      manager.current.init(world, assets);
+    }
+  }, [world, assets]);
 
   return (
     <div>

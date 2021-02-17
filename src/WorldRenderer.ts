@@ -1,9 +1,18 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
+<<<<<<< HEAD
 import { Assets, cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Direction, Corner } from './types';
 import { Hex, terrainColors, terrainTransitions, TerrainType, World } from './World';
 import { WorldTileset, OFFSET_Y } from './WorldTileset';
 import { HexTile } from './shared';
+=======
+import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
+import { Hex, World } from './World';
+import { terrainColors, terrainTransitions, TerrainType } from './terrain';
+import { WorldTileset } from './WorldTileset';
+import { HexTile, OFFSET_Y } from './hexTile';
+import { Assets } from './AssetLoader';
+>>>>>>> master
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -21,6 +30,7 @@ export class WorldRenderer {
   chunkTileLayers: Map<string, CompositeRectTileLayer[]>;
   hexChunk: Map<string, string>;
   chunkHexes: Map<string, { x: number, y: number }[]>;
+  chunkDrawTimes: Map<string, number>;
   worldTileset: WorldTileset;
   chunksLayer: PIXI.Container;
   hexTiles: Map<Hex, HexTile>;
@@ -37,6 +47,7 @@ export class WorldRenderer {
     this.hexTiles = new Map();
     
     this.chunkTileLayers = new Map();
+    this.chunkDrawTimes = new Map();
     this.hexChunk = new Map();
     this.chunkHexes = new Map();
     const { width, height } = world.gridSize;
@@ -63,7 +74,9 @@ export class WorldRenderer {
       }
     }
 
-    this.render();
+    this.worldTileset.load().then(() => {
+      this.onNewWorld(world);
+    });
 
     // setup events
     document.addEventListener('keyup', event => {
@@ -73,6 +86,13 @@ export class WorldRenderer {
     });
   }
 
+  onNewWorld(world: World) {
+    this.world = world;
+
+    this.renderDebug();
+    this.render();
+  }
+
   private getChunkForCoordinate(x: number, y: number) {
     const y2 = x % 2 + y * 2;
     const chunkY = y2 / CHUNK_HEIGHT | 0;
@@ -80,7 +100,9 @@ export class WorldRenderer {
     return { chunkX, chunkY };
   }
 
-  private drawChunk(chunkKey: string) {
+  private async drawChunk(chunkKey: string) {
+    // console.log('draw chunk', chunkKey);
+    const timeStart = Date.now();
     const [terrainLayer] = this.chunkTileLayers.get(chunkKey);
     const hexes = this.chunkHexes.get(chunkKey);
     const hexPosititions: [number, number][] = [];
@@ -94,6 +116,8 @@ export class WorldRenderer {
     }
     // TODO: why casting is required
     (terrainLayer as any).position.set((minX), (minY));
+
+    const hexPromises: Promise<number>[] = [];
 
     hexes.forEach((hex, index) => {
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
@@ -178,7 +202,8 @@ export class WorldRenderer {
         cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
         edgeRoads: edgeRoads as DirectionMap<boolean>,
       };
-      const hexTileID = this.worldTileset.getTile(hexTile);
+      hexPromises.push(this.worldTileset.getTile(hexTile));
+      const hexTileID = this.worldTileset.getTileID(hexTile);
       const texture = this.worldTileset.getTextureForID(hexTileID);
       const [ x, y ] = hexPosititions[index];
       if (texture) {
@@ -190,13 +215,15 @@ export class WorldRenderer {
       }
       this.hexTiles.set(hexObj, hexTile);
     });
+
+    await Promise.all(hexPromises);
+
+    const timeEnd = Date.now();
+    this.chunkDrawTimes.set(chunkKey, timeEnd - timeStart);
   }
 
-  render() {
-    console.time('drawHexTile');
-    
+  async render() {
     this.worldTileset.updateTileset();
-    console.timeEnd('drawHexTile');
 
     console.groupCollapsed('draw chunks');
     console.time('draw chunks');
@@ -204,20 +231,27 @@ export class WorldRenderer {
     const bitmaps = [
       new PIXI.Texture(this.worldTileset.renderTexture.baseTexture),
     ];
+
+    const chunkPromises: Promise<void>[] = [];
     for (const chunkKey of this.chunkHexes.keys()) {
       const terrainLayer = new CompositeRectTileLayer(0, bitmaps);
       this.chunkTileLayers.set(chunkKey, [terrainLayer]);
       this.chunksLayer.addChild(terrainLayer as any);
-      this.drawChunk(chunkKey);
+      // chunkPromises.push(this.drawChunk(chunkKey));
+      await this.drawChunk(chunkKey);
+      // this.worldTileset.updateTileset();
     }
-    this.worldTileset.updateTileset();
+    // await Promise.all(chunkPromises);
     console.timeEnd('draw chunks');
+    this.worldTileset.updateTileset();
+    this.worldTileset.saveTileStore();
     console.groupEnd();
 
     // const sprite = new PIXI.Sprite(this.worldTileset.renderTexture);
-    // this.debugGraphics.addChild(sprite);
+    // this.debugGraphics.addChild(sprite)
+  }
 
-
+  renderDebug() {
     // debug
     this.world.hexgrid.forEach(hex => {
       const point = hex.toPoint()

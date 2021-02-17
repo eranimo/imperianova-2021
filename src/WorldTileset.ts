@@ -1,597 +1,23 @@
+import localForage from 'localforage';
 import ndarray from 'ndarray';
 import * as PIXI from 'pixi.js';
-import { TileGrid } from './TileGrid';
-import { Assets, ColorArray, CoordArray, Corner, cornerDirections, cornerIndexOrder, CornerMap, Direction, directionIndexOrder, DirectionMap, directionCorners, Coord, adjacentDirections, AutogenObjectTile } from './types';
-import { colorArrayMatches, midpointPoints, midpoint, rotatePoint, getImageIndexFromCoord, distance, pickRandom } from './utils';
-import { terrainTransitions, TerrainType } from './World';
-import FastPoissonDiskSampling from 'fast-2d-poisson-disk-sampling';
-import { Tileset } from './Tileset';
-import SimplexNoise from 'simplex-noise';
-import { clamp, range } from 'lodash';
-
-export type HexTile = {
-  terrainType: TerrainType,
-  edgeTerrainTypes: DirectionMap<TerrainType | null>,
-  cornerTerrainTypes: CornerMap<TerrainType | null>,
-  edgeRoads: DirectionMap<boolean | null>;
-}
-
-export enum CellType {
-  NONE = 0,
-
-  DEBUG_SE,
-  DEBUG_NE,
-  DEBUG_N,
-  DEBUG_NW,
-  DEBUG_SW,
-  DEBUG_S,
-  DEBUG_CENTER,
-
-  DEBUG_RIGHT,
-  DEBUG_BOTTOM_RIGHT,
-  DEBUG_BOTTOM_LEFT,
-  DEBUG_LEFT,
-  DEBUG_TOP_LEFT,
-  DEBUG_TOP_RIGHT,
-
-  DEBUG_RIGHT_0,
-  DEBUG_RIGHT_1,
-  DEBUG_BOTTOM_RIGHT_0,
-  DEBUG_BOTTOM_RIGHT_1,
-  DEBUG_BOTTOM_LEFT_0,
-  DEBUG_BOTTOM_LEFT_1,
-  DEBUG_LEFT_0,
-  DEBUG_LEFT_1,
-  DEBUG_TOP_LEFT_0,
-  DEBUG_TOP_LEFT_1,
-  DEBUG_TOP_RIGHT_0,
-  DEBUG_TOP_RIGHT_1,
-
-  TERRAIN_OCEAN,
-  TERRAIN_COAST,
-  TERRAIN_GRASSLAND,
-  TERRAIN_FOREST,
-  TERRAIN_GLACIAL,
-  TERRAIN_DESERT,
-  TERRAIN_TAIGA,
-  TERRAIN_TUNDRA,
-
-  RIVER,
-  RIVER_MOUTH,
-  RIVER_SOURCE,
-
-  ROAD,
-};
-
-type Feature = {
-  coord: Coord,
-  id: number,
-}
-
-type FeatureDef = {
-  ids: number[],
-  radius: number,
-  transitionCellType?: CellType,
-}
-
-const cellTypeFeatures: Partial<Record<CellType, number[]>> = {
-  [CellType.TERRAIN_GRASSLAND]: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
-  [CellType.TERRAIN_FOREST]: [20, 21, 22, 23, 24, 25, 26, 27],
-  [CellType.TERRAIN_TAIGA]: [40, 41, 42, 43, 44, 45, 46],
-}
-
-const cellTypeTransitions = {
-  [CellType.TERRAIN_GRASSLAND]: {
-    other: CellType.TERRAIN_COAST,
-    paint: [
-      { operation: 'expand', width: 2, chance: 0.9, color: [] },
-    ]
-  },
-}
+import { CellType, cellTypeColor, cornerCellTypes, cornerSideCellTypes, directionCellTypes, getHexTileID, HexTile, OFFSET_Y } from './hexTile';
+import { ColorArray, cornerIndexOrder, directionIndexOrder, ExportedTileset } from './types';
+import { colorArrayMatches, logGroupTime, logTime } from './utils';
+import { spawn, Pool, Worker } from 'threads';
+import TileRendererWorker from 'worker-loader!./workers/tileRenderer.worker';
+import { reject } from 'lodash';
+import { Assets } from './AssetLoader';
 
 
-const directionToCellType = {
-  [Direction.SE]: CellType.DEBUG_SE,
-  [Direction.NE]: CellType.DEBUG_NE,
-  [Direction.N]: CellType.DEBUG_N,
-  [Direction.NW]: CellType.DEBUG_NW,
-  [Direction.SW]: CellType.DEBUG_SW,
-  [Direction.S]: CellType.DEBUG_S,
-}
+const ENABLE_TILE_CACHE = true;
+const TILE_RENDERER_POOL_SIZE = navigator.hardwareConcurrency;
+const TILE_RENDERER_CONCURRENCY = 1;
 
-const cellTypeColor: Partial<Record<CellType, ColorArray>> = {
-  [CellType.DEBUG_SE]: [0, 255, 255],
-  [CellType.DEBUG_NE]: [255, 0, 255],
-  [CellType.DEBUG_N]: [255, 0, 0],
-  [CellType.DEBUG_NW]: [0, 0, 255],
-  [CellType.DEBUG_SW]: [255, 255, 0],
-  [CellType.DEBUG_S]: [0, 255, 0],
-  [CellType.DEBUG_CENTER]: [0, 0, 0],
-
-  [CellType.DEBUG_RIGHT]: [0, 125, 125],
-  [CellType.DEBUG_BOTTOM_RIGHT]: [0, 0, 125],
-  [CellType.DEBUG_BOTTOM_LEFT]: [0, 125, 0],
-  [CellType.DEBUG_LEFT]: [125, 0, 0],
-  [CellType.DEBUG_TOP_LEFT]: [125, 0, 125],
-  [CellType.DEBUG_TOP_RIGHT]: [125, 125, 0],
-
-  [CellType.DEBUG_RIGHT_0]: [100, 0, 100],
-  [CellType.DEBUG_RIGHT_1]: [0, 200, 200],
-  [CellType.DEBUG_BOTTOM_RIGHT_0]: [0, 100, 100],
-  [CellType.DEBUG_BOTTOM_RIGHT_1]: [0, 200, 0],
-  [CellType.DEBUG_BOTTOM_LEFT_0]: [0, 100, 0],
-  [CellType.DEBUG_BOTTOM_LEFT_1]: [200, 200, 0],
-  [CellType.DEBUG_LEFT_0]: [100, 100, 0],
-  [CellType.DEBUG_LEFT_1]: [0, 0, 200],
-  [CellType.DEBUG_TOP_LEFT_0]: [0, 0, 100],
-  [CellType.DEBUG_TOP_LEFT_1]: [200, 0, 0],
-  [CellType.DEBUG_TOP_RIGHT_0]: [100, 0, 0],
-  [CellType.DEBUG_TOP_RIGHT_1]: [200, 0, 200],
-  
-  [CellType.TERRAIN_COAST]: [37, 140, 219],
-  [CellType.TERRAIN_OCEAN]: [30, 118, 186],
-  [CellType.TERRAIN_GRASSLAND]: [120, 178, 76],
-  [CellType.TERRAIN_FOREST]: [121, 168, 86],
-  [CellType.TERRAIN_GLACIAL]: [250, 250, 250],
-  [CellType.TERRAIN_DESERT]: [217, 191, 140],
-  [CellType.TERRAIN_TUNDRA]: [150, 209, 195],
-  [CellType.TERRAIN_TAIGA]: [57, 117, 47],
-
-  [CellType.RIVER]: [37, 140, 219],
-  [CellType.RIVER_MOUTH]: [37, 140, 219],
-  [CellType.RIVER_SOURCE]: [37, 140, 219],
-
-  [CellType.ROAD]: [128, 83, 11],
-}
-
-const renderOrder: CellType[] = [
-  CellType.RIVER,
-  CellType.RIVER_MOUTH,
-  CellType.RIVER_SOURCE,
-  CellType.TERRAIN_COAST,
-  CellType.TERRAIN_OCEAN,
-  CellType.TERRAIN_GRASSLAND,
-  CellType.TERRAIN_FOREST,
-  CellType.TERRAIN_TAIGA,
-  CellType.TERRAIN_GLACIAL,
-  CellType.TERRAIN_DESERT,
-  CellType.TERRAIN_TUNDRA,
-]
-
-const directionCellTypes = {
-  [Direction.SE]: CellType.DEBUG_SE,
-  [Direction.NE]: CellType.DEBUG_NE,
-  [Direction.N]: CellType.DEBUG_N,
-  [Direction.NW]: CellType.DEBUG_NW,
-  [Direction.SW]: CellType.DEBUG_SW,
-  [Direction.S]: CellType.DEBUG_S,
-}
-
-const cornerCellTypes = {
-  [Corner.RIGHT]: CellType.DEBUG_RIGHT,
-  [Corner.BOTTOM_RIGHT]: CellType.DEBUG_BOTTOM_RIGHT,
-  [Corner.BOTTOM_LEFT]: CellType.DEBUG_BOTTOM_LEFT,
-  [Corner.LEFT]: CellType.DEBUG_LEFT,
-  [Corner.TOP_LEFT]: CellType.DEBUG_TOP_LEFT,
-  [Corner.TOP_RIGHT]: CellType.DEBUG_TOP_RIGHT,
-}
-
-const cornerSideCellTypes = {
-  [Corner.RIGHT]: [CellType.DEBUG_RIGHT_0, CellType.DEBUG_RIGHT_1],
-  [Corner.BOTTOM_RIGHT]: [CellType.DEBUG_BOTTOM_RIGHT_0, CellType.DEBUG_BOTTOM_RIGHT_1],
-  [Corner.BOTTOM_LEFT]: [CellType.DEBUG_BOTTOM_LEFT_0, CellType.DEBUG_BOTTOM_LEFT_1],
-  [Corner.LEFT]: [CellType.DEBUG_LEFT_0, CellType.DEBUG_LEFT_1],
-  [Corner.TOP_LEFT]: [CellType.DEBUG_TOP_LEFT_0, CellType.DEBUG_TOP_LEFT_1],
-  [Corner.TOP_RIGHT]: [CellType.DEBUG_TOP_RIGHT_0, CellType.DEBUG_TOP_RIGHT_1],
-}
-
-const terrainPrimaryCellTypes: Partial<Record<TerrainType, CellType>> = {
-  [TerrainType.OCEAN]: CellType.TERRAIN_OCEAN,
-  [TerrainType.COAST]: CellType.TERRAIN_COAST,
-  [TerrainType.GRASSLAND]: CellType.TERRAIN_GRASSLAND,
-  [TerrainType.FOREST]: CellType.TERRAIN_FOREST,
-  [TerrainType.GLACIAL]: CellType.TERRAIN_GLACIAL,
-  [TerrainType.TAIGA]: CellType.TERRAIN_TAIGA,
-  [TerrainType.TUNDRA]: CellType.TERRAIN_TUNDRA,
-  [TerrainType.DESERT]: CellType.TERRAIN_DESERT,
-  [TerrainType.RIVER]: CellType.RIVER,
-  [TerrainType.RIVER_MOUTH]: CellType.RIVER_MOUTH,
-  [TerrainType.RIVER_SOURCE]: CellType.RIVER_SOURCE,
-};
-
-function lighter(color: ColorArray, amount: number): ColorArray {
-  return [
-    clamp(Math.round(color[0] * amount), 0, 255),
-    clamp(Math.round(color[1] * amount), 0, 255),
-    clamp(Math.round(color[2] * amount), 0, 255),
-  ];
-}
-
-function darker(color: ColorArray, amount: number): ColorArray {
-  return [
-    clamp(Math.round(color[0] * amount), 0, 255),
-    clamp(Math.round(color[1] * amount), 0, 255),
-    clamp(Math.round(color[2] * amount), 0, 255),
-  ];
-}
-
-function getHexTileID(hexTile: HexTile) {
-  return (
-    // terrain type
-    (((TerrainType.__LENGTH - 1) ** 0) * hexTile.terrainType) +
-
-    // edge terrain types
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.SE)) * hexTile.edgeTerrainTypes[Direction.SE]) +
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.NE)) * hexTile.edgeTerrainTypes[Direction.NE]) +
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.N)) * hexTile.edgeTerrainTypes[Direction.N]) +
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.NW)) * hexTile.edgeTerrainTypes[Direction.NW]) +
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.SW)) * hexTile.edgeTerrainTypes[Direction.SW]) +
-    (((TerrainType.__LENGTH - 1) ** (1 + Direction.S)) * hexTile.edgeTerrainTypes[Direction.S]) +
-
-    // corner terrain types
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.RIGHT)) * hexTile.cornerTerrainTypes[Corner.RIGHT]) +
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.BOTTOM_RIGHT)) * hexTile.cornerTerrainTypes[Corner.BOTTOM_RIGHT]) +
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.BOTTOM_LEFT)) * hexTile.cornerTerrainTypes[Corner.BOTTOM_LEFT]) +
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.LEFT)) * hexTile.cornerTerrainTypes[Corner.LEFT]) +
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_LEFT)) * hexTile.cornerTerrainTypes[Corner.TOP_LEFT]) +
-    (((TerrainType.__LENGTH - 1) ** (7 + Corner.TOP_RIGHT)) * hexTile.cornerTerrainTypes[Corner.TOP_RIGHT]) +
-
-    // hex edge features
-    ((2 ** (13 + Direction.SE)) * Number(hexTile.edgeRoads[Direction.SE])) +
-    ((2 ** (13 + Direction.NE)) * Number(hexTile.edgeRoads[Direction.NE])) +
-    ((2 ** (13 + Direction.N)) * Number(hexTile.edgeRoads[Direction.N])) +
-    ((2 ** (13 + Direction.NW)) * Number(hexTile.edgeRoads[Direction.NW])) +
-    ((2 ** (13 + Direction.SW)) * Number(hexTile.edgeRoads[Direction.SW])) +
-    ((2 ** (13 + Direction.S)) * Number(hexTile.edgeRoads[Direction.S]))
-  );
-}
-
-export const OFFSET_Y = 10;
-
-const edgeCenterPoints: DirectionMap<Coord> = {
-  [Direction.SE]: [56, 44 + OFFSET_Y],
-  [Direction.NE]: [56, 15 + OFFSET_Y],
-  [Direction.N]: [31, 0 + OFFSET_Y],
-  [Direction.NW]: [7, 15 + OFFSET_Y],
-  [Direction.SW]: [7, 44 + OFFSET_Y],
-  [Direction.S]: [31, 59 + OFFSET_Y],
-};
-
-
-function placeObject(
-  autogenLayer: ndarray,
-  autogenObjects: Tileset<AutogenObjectTile>,
-  tileID: number,
-  pos: Coord,
-) {
-  if (!autogenObjects.tileFrame.has(tileID)) {
-    throw new Error(`Unknown autogen object with ID ${tileID}`);
-  }
-  const { x: tx, y: ty, width, height } = autogenObjects.tileFrame.get(tileID);
-  for (let y = ty; y < (ty + height); y++) {
-    for (let x = tx; x < (tx + width); x++) {
-      const index = getImageIndexFromCoord([x, y], autogenObjects.imageData.width);
-      const r = autogenObjects.imageData.data[index] / 255;
-      const g = autogenObjects.imageData.data[index + 1] / 255;
-      const b = autogenObjects.imageData.data[index + 2] / 255;
-      const a = autogenObjects.imageData.data[index + 3] / 255;
-      if (a > 0) {
-        const ax = ((x - tx) + pos[0]) - 7;
-        const ay = ((y - ty) + pos[1]) - 14;
-        autogenLayer.set(ax, ay, 0, r);
-        autogenLayer.set(ax, ay, 1, g);
-        autogenLayer.set(ax, ay, 2, b);
-        autogenLayer.set(ax, ay, 3, a);
-      }
-    }
-  }
-}
-
-function drawHexTile(
-  hexTile: HexTile,
-  width: number,
-  height: number,
-  templateGrid: ndarray,
-  autogenObjects: Tileset<AutogenObjectTile>,
-): PIXI.Texture {
-  const grid = new TileGrid(hexTile, width, height);
-  const centerPoint: Coord = [32, 32 + OFFSET_Y];
-  let cellTypePoints = new Map();
-
-  // replace template grid with correct cell types
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < (height - OFFSET_Y); y++) {
-      grid.set(x, y + OFFSET_Y, templateGrid.get(x, y));
-    }
-  }
-
-  const cellTypeReplacements = new Map<CellType, CellType>();
-  for (const direction of directionIndexOrder) {
-    const edgeTerrainType = hexTile.edgeTerrainTypes[direction] as TerrainType;
-    cellTypeReplacements.set(
-      directionCellTypes[direction],
-      terrainPrimaryCellTypes[edgeTerrainType]
-    );
-  }
-
-  for (const corner of cornerIndexOrder) {
-    const cornerTerrainType = hexTile.cornerTerrainTypes[corner] as TerrainType;
-    cellTypeReplacements.set(
-      cornerCellTypes[corner],
-      terrainPrimaryCellTypes[cornerTerrainType]
-    );
-
-    for (let i = 0; i <= 1; i++) {
-      const dir = cornerDirections[corner][i];
-      let cornerSideTerrainType = hexTile.edgeTerrainTypes[dir] as TerrainType;
-      if (
-        // cornerTerrainType === TerrainType.RIVER || 
-        cornerTerrainType === TerrainType.RIVER_MOUTH || 
-        (terrainTransitions[hexTile.edgeTerrainTypes[dir]] &&
-          terrainTransitions[hexTile.edgeTerrainTypes[dir]].includes(cornerTerrainType))
-      ) {
-        cornerSideTerrainType = cornerTerrainType;
-      }
-      
-      cellTypeReplacements.set(
-        cornerSideCellTypes[corner][i],
-        terrainPrimaryCellTypes[cornerSideTerrainType],
-      );
-    }
-  }
-
-  // replace debug cell types with real cell types
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      const cellType = grid.get(x, y);
-      if (cellTypeReplacements.has(cellType)) {
-        grid.set(x, y, cellTypeReplacements.get(cellType));
-      }
-    }
-  }
-
-  // flood fill center of tile
-  grid.floodFill(
-    Math.round(width / 2),
-    Math.round(height / 2),
-    CellType.DEBUG_CENTER,
-    value => value === 0,
-  );
-
-  // draw a line from each river mouth cell to the center of the hex
-  // to ensure rivers actually flow into the ocean
-  if (hexTile.terrainType === TerrainType.COAST) {
-    const riverMouthLines: [Coord, Coord][]  = [];
-    grid.forEachCell((x, y) => {
-      if (grid.get(x, y) === CellType.RIVER_MOUTH) {
-        const point: Coord = [x, y];
-        riverMouthLines.push([point, centerPoint]);
-      }
-    });
-    for (const [p1, p2] of riverMouthLines) {
-      grid.plotLine(p1, p2, CellType.RIVER_MOUTH);
-    }
-  }
-
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < height; y++) {
-      const cellType = grid.get(x, y);
-      if (cellType !== CellType.NONE && cellType !== CellType.DEBUG_CENTER) {
-        if (cellTypePoints.has(cellType)) {
-          cellTypePoints.get(cellType).push([x, y]);
-        } else {
-          cellTypePoints.set(cellType, [[x, y]]);
-        }
-      }
-    }
-  }
-
-  const isRiver = cellType => (
-    cellType === CellType.RIVER
-    || cellType === CellType.RIVER_MOUTH
-    || cellType === CellType.RIVER_SOURCE
-  );
-
-  // terrain transitions
-  for (let count = 1; count <= 4; count++) {
-    for (const cellType of renderOrder) {
-      const cells = cellTypePoints.get(cellType);
-      if (!cells) continue;
-      let newCells: CoordArray;
-      if (isRiver(cellType) && count >= 3) {
-        continue;
-      }
-      newCells = grid.expandNaturally(
-        cells,
-        value => value == CellType.DEBUG_CENTER,
-        cellType,
-        1,
-        isRiver(cellType) ? 0.85 : 0.70,
-      );
-      if (count === 4) {
-        grid.removeIslandNeighbors(
-          cells,
-          CellType.DEBUG_CENTER,
-          cellType,
-          cellType,
-        );
-        grid.removeIslandNeighbors(
-          cells,
-          cellType,
-          CellType.DEBUG_CENTER,
-          CellType.DEBUG_CENTER,
-        );
-      }
-      cellTypePoints.set(cellType, newCells);
-    }
-  }
-
-  // roads
-  let roadCenter = centerPoint;
-  let roadPoints: CoordArray = [];
-  for (const direction of directionIndexOrder) {
-    if (hexTile.edgeRoads[direction]) {
-      roadPoints.push(edgeCenterPoints[direction]);
-    }
-  }
-  if (roadPoints.length > 1) {
-    roadCenter = midpointPoints(roadPoints);
-  }
-
-  const randomizePoint = (point: Coord, range: number): Coord => {
-    return [
-      point[0] + (Math.round((Math.random() - 0.5) * 5)),
-      point[1] + (Math.round((Math.random() - 0.5) * 5)),
-    ];
-  }
-  roadCenter = randomizePoint(roadCenter, 5);
-
-  let roadCells = [];
-  for (const direction of directionIndexOrder) {
-    if (hexTile.edgeRoads[direction]) {
-      const [x, y] = edgeCenterPoints[direction];
-      const center = randomizePoint(midpoint(roadCenter, [x, y]), 5);
-      const c1 = rotatePoint(
-        center,
-        roadCenter,
-        90,
-      );
-      const c2 = rotatePoint(
-        center,
-        roadCenter,
-        -90,
-      );
-      const cells = grid.getNoisyLine(
-        roadCenter,
-        [x, y],
-        c1,
-        c2,
-        CellType.ROAD,
-        3,
-        0.30
-      );
-      for (const [cx, cy] of cells) {
-        grid.set(cx, cy, CellType.ROAD);
-        roadCells.push([cx, cy]);
-      }
-    }
-  }
-  grid.expand(
-    roadCells,
-    value => value !== CellType.NONE,
-    CellType.ROAD,
-    1,
-  )
-
-  const centerCellType = terrainPrimaryCellTypes[hexTile.terrainType];
-  grid.replaceAll(CellType.DEBUG_CENTER, centerCellType);
-
-  // features
-  const features = ndarray(new Int8Array(width * height), [width, height]);
-  for (let fy = 0; fy < height; fy++) {
-    for (let fx = 0; fx < width; fx++) {
-      features.set(fx, fy, -1);
-    }
-  }
-  const poissonDisk = new FastPoissonDiskSampling({
-    shape: [width, height],
-    radius: 3,
-    tries: 10,
-  }, Math.random);
-  poissonDisk.fill();
-  const points = poissonDisk.getAllPoints() as CoordArray;
-  if (points.length > 0) {
-    for (const [x, y] of points) {
-      const cx = Math.round(x);
-      const cy = Math.round(y);
-      const cellType = grid.get(cx, cy);
-      if (
-        cellTypeFeatures[cellType]
-      ) {
-        const id = pickRandom(cellTypeFeatures[cellType])
-        features.set(cx, cy, id);
-      }
-    }
-  }
-  
-  const autogenLayer = ndarray(new Float32Array(width * height * 4), [width, height, 4]);
-  for (let fy = 0; fy < height; fy++) {
-    for (let fx = 0; fx < width; fx++) {
-      const featureID = features.get(fx, fy);
-      if (featureID >= 0) {
-        placeObject(autogenLayer, autogenObjects, featureID, [fx, fy]);
-      }
-    }
-  }
-
-  // const MAX_HILL_HEIGHT = 10;
-  // const HILL_NOISE_SCALE = 10;
-  // const heightMap = ndarray(new Uint8ClampedArray(width * height), [width, height]);
-  // const noise = new SimplexNoise();
-  // for (let y = 0; y < height; y++) {
-  //   for (let x = 0; x < width; x++) {
-  //     if (grid.get(x, y) === CellType.SAND) {
-  //       const curve = 1 - clamp(distance(centerPoint, [x, y]) / 28, 0, 1);
-  //       const v = (noise.noise2D(x / HILL_NOISE_SCALE, y / HILL_NOISE_SCALE) + 1) / 2;
-  //       heightMap.set(x, y, Math.max(0, Math.round(curve * v * MAX_HILL_HEIGHT)) - 2);
-  //     }
-  //   }
-  // }
-  
-  // for (let y = OFFSET_Y; y < height; y++) {
-  //   for (let x = 0; x < width; x++) {
-  //     const height = heightMap.get(x, y)
-  //     if (height > 0) {
-  //       for (let h = 0; h < height; h++) {
-  //         const yy = y - h;
-  //         const v = 1 + ((height / MAX_HILL_HEIGHT) * 0.5);
-  //         const [r, g, b] = lighter(cellTypeColor[centerCellType], v);
-  //         autogenLayer.set(x, yy, 0, r / 255);
-  //         autogenLayer.set(x, yy, 1, g / 255);
-  //         autogenLayer.set(x, yy, 2, b / 255);
-  //         autogenLayer.set(x, yy, 3, 1);
-  //       }
-  //     }
-  //   }
-  // }
-
-
-  // convert to image
-  const buffer = new Float32Array(width * height * 4);
-  let i = 0;
-  const dim = 4;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const cellType = grid.get(x, y);
-      const color = cellTypeColor[cellType];
-      if (color) {
-        let [r, g, b] = color;
-        buffer[(i * dim) + 0] = r / 255;
-        buffer[(i * dim) + 1] = g / 255;
-        buffer[(i * dim) + 2] = b / 255;
-        buffer[(i * dim) + 3] = 1;
-      } else {
-        buffer[(i * dim) + 0] = 0;
-        buffer[(i * dim) + 1] = 0;
-        buffer[(i * dim) + 2] = 0;
-        buffer[(i * dim) + 3] = 0;
-      }
-      const r_o = autogenLayer.get(x, y, 0);
-      const g_o = autogenLayer.get(x, y, 1);
-      const b_o = autogenLayer.get(x, y, 2);
-      const a_o = autogenLayer.get(x, y, 3);
-      if (a_o !== 0) {
-        buffer[(i * dim) + 0] = r_o;
-        buffer[(i * dim) + 1] = g_o;
-        buffer[(i * dim) + 2] = b_o;
-        buffer[(i * dim) + 3] = a_o;
-      }
-      i++;
-    }
-  }
-
-  return PIXI.Texture.fromBuffer(buffer, width, height);
-}
+localForage.config({
+  driver: localForage.INDEXEDDB,
+  name: 'tileStore',
+});
 
 export class WorldTileset {
   public renderTexture: PIXI.RenderTexture;
@@ -601,8 +27,12 @@ export class WorldTileset {
   private hexTileSprite: Map<number, PIXI.Sprite>;
   private hexTileTexture: Map<number, PIXI.Texture>;
   private tileIDToIndex: Map<number, number>;
+  tileBufferStore: { [tileID: number]: Float32Array };
   public numTiles: number;
   templateGrid: ndarray;
+  tileRenderWorkerPool: any;
+  autogenObjectTilesetExport: ExportedTileset;
+  templateGridBuffer: SharedArrayBuffer;
 
   constructor(
     private renderer: PIXI.Renderer,
@@ -622,11 +52,20 @@ export class WorldTileset {
     })
     this.renderTexture = new PIXI.RenderTexture(rt);
     this.tileIDToIndex = new Map();
+    this.tileBufferStore = {};
     this.numTiles = 0;
+    this.tileRenderWorkerPool = Pool(
+      () => spawn(new TileRendererWorker()),
+      {
+        size: TILE_RENDERER_POOL_SIZE,
+        name: 'tileRenderer worker',
+        concurrency: TILE_RENDERER_CONCURRENCY,
+      }
+    );
 
     // generate template grid buffer
-    const templateGridBuffer = new Uint8Array(this.tileWidth * this.tileHeight);
-    this.templateGrid = ndarray(templateGridBuffer, [this.tileWidth, this.tileHeight]);
+    this.templateGridBuffer = new SharedArrayBuffer(this.tileWidth * this.tileHeight * Uint8Array.BYTES_PER_ELEMENT);
+    this.templateGrid = ndarray(new Uint8Array(this.templateGridBuffer), [this.tileWidth, this.tileHeight]);
     const templateImage = (assets.hexTemplate.texture.baseTexture.resource as any).source as HTMLImageElement;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -641,6 +80,10 @@ export class WorldTileset {
           imageData.data[index + 1],
           imageData.data[index + 2],
         ];
+
+        if (colorArrayMatches(cellTypeColor[CellType.DEBUG_CENTER], thisColor)) {
+          this.templateGrid.set(x, y, CellType.DEBUG_CENTER);
+        }
        
         for (const direction of directionIndexOrder) {
           const cellType = directionCellTypes[direction];
@@ -668,6 +111,13 @@ export class WorldTileset {
       }
     }
     console.log('template grid', this.templateGrid);
+    this.autogenObjectTilesetExport = this.assets.autogenObjects.export();
+  }
+
+  async load() {
+    if (ENABLE_TILE_CACHE) {
+      this.tileBufferStore = (await localForage.getItem('tileBufferStore')) || {};
+    }
   }
 
   static COLUMNS = 200;
@@ -698,25 +148,52 @@ export class WorldTileset {
     return Math.ceil(WorldTileset.MAX_TILES / WorldTileset.COLUMNS);
   }
 
+  private async renderHexTile(hexTile: HexTile): Promise<Float32Array> {
+    const width = this.tileWidth;
+    const height = this.tileHeight + OFFSET_Y;
+    return new Promise((resolve, reject) => {
+      try {
+        const tileBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height * 4);
+        this.tileRenderWorkerPool.queue(async worker => {
+          await worker(
+            tileBuffer,
+            hexTile,
+            width,
+            height,
+            this.templateGridBuffer,
+            { width: this.tileWidth, height: this.tileHeight },
+            this.autogenObjectTilesetExport,
+          );
+          const tileArray = new Float32Array(tileBuffer);
+          // console.log('render worker returned', tileArray);
+          resolve(tileArray);
+        });
+      } catch (err) {
+        console.error(err);
+        reject(err);
+      }
+    });
+  }
+
   /**
    * (re)generates a HexTile
    * @param hexTile HexTile
    * @returns HexTile ID
    */
-  private generateTile(hexTile: HexTile): number {
+  private async generateTile(hexTile: HexTile): Promise<number> {
     // console.log('generating', hexTile);
     const id = getHexTileID(hexTile);
     const index = this.numTiles;
     this.numTiles++;
     this.tileIDToIndex.set(id, index);
     // console.time(`generating hex ID ${id}`);
-    const texture = drawHexTile(
-      hexTile,
-      this.tileWidth,
-      this.tileHeight + OFFSET_Y,
-      this.templateGrid,
-      this.assets.autogenObjects,
-    );
+    let tileBuffer = this.tileBufferStore[id];
+    if (!tileBuffer) {
+      tileBuffer = await this.renderHexTile(hexTile);
+      this.tileBufferStore[id] = tileBuffer;
+    }
+
+    const texture = PIXI.Texture.fromBuffer(tileBuffer, this.tileWidth, this.tileHeight + OFFSET_Y);
     const sprite = new PIXI.Sprite(texture);
     this.hexTileMap.set(id, hexTile);
     sprite.position.set(
@@ -734,12 +211,16 @@ export class WorldTileset {
    * @param hexTile HexTile
    * @returns HexTile ID
    */
-  public getTile(hexTile: HexTile): number {
+  public async getTile(hexTile: HexTile): Promise<number> {
     const id = getHexTileID(hexTile);
     if (!this.hexTileMap.has(id)) {
       return this.generateTile(hexTile);
     }
     return id;
+  }
+
+  getTileID(hexTile: HexTile) {
+    return getHexTileID(hexTile);
   }
 
   /**
@@ -762,7 +243,22 @@ export class WorldTileset {
     return texture;
   }
 
+  @logTime('updateTileset')
   public updateTileset() {
-    this.renderer.render(this.container, this.renderTexture);
+    this.renderer.render(this.container, this.renderTexture, false, null, false);
+  }
+
+  public saveTileStore() {
+    if (ENABLE_TILE_CACHE) {
+      console.time('save tile store');
+      const store = {};
+      for (const [key, buffer] of Object.entries(this.tileBufferStore)) {
+        const newBuffer = new Float32Array(buffer.length);
+        newBuffer.set(buffer, 0);
+        store[key] = newBuffer;
+      }
+      localForage.setItem('tileBufferStore', store);
+      console.timeEnd('save tile store');
+    }
   }
 }
