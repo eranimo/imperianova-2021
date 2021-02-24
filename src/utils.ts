@@ -1,8 +1,9 @@
 import ndarray from 'ndarray';
 import { CoordArray, Coord, ColorArray } from './types';
+import { clamp } from 'lodash';
 
 
-export function octaveNoise(
+export function octaveNoise3D(
   noiseFunc: (x: number, y: number, z: number) => number,
   x: number,
   y: number,
@@ -17,6 +18,28 @@ export function octaveNoise(
   let maxValue = 0; // Used for normalizing result to 0.0 - 1.0
   for (let i = 0; i < octaves; i++) {
     total += noiseFunc(x * frequency_, y * frequency_, z * frequency_) * amplitude;
+    maxValue += amplitude;
+    amplitude *= persistence;
+    frequency_ *= 2;
+  }
+
+  return total / maxValue;
+}
+
+export function octaveNoise2D(
+  noiseFunc: (x: number, y: number) => number,
+  x: number,
+  y: number,
+  octaves: number,
+  persistence: number,
+  frequency: number = 1,
+) {
+  let total = 0;
+  let frequency_ = frequency;
+  let amplitude = 1;
+  let maxValue = 0; // Used for normalizing result to 0.0 - 1.0
+  for (let i = 0; i < octaves; i++) {
+    total += noiseFunc(x * frequency_, y * frequency_) * amplitude;
     maxValue += amplitude;
     amplitude *= persistence;
     frequency_ *= 2;
@@ -348,4 +371,45 @@ export class MultiMap<K, V> {
       yield [key, this.map.get(key)];
     }
   }
+}
+
+export const randomizePoint = (point: Coord, range: number): Coord => {
+  return [
+    point[0] + (Math.round((Math.random() - 0.5) * range)),
+    point[1] + (Math.round((Math.random() - 0.5) * range)),
+  ];
+}
+
+export function hexToRgb(hex: string): ColorArray {
+  var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? [
+    parseInt(result[1], 16),
+    parseInt(result[2], 16),
+    parseInt(result[3], 16)
+  ] : null;
+}
+
+export function randomizeColor(color: ColorArray, range: number): ColorArray {
+  return [
+    clamp(color[0] + (Math.round((Math.random() - 0.5) * range)), 0, 255),
+    clamp(color[1] + (Math.round((Math.random() - 0.5) * range)), 0, 255),
+    clamp(color[2] + (Math.round((Math.random() - 0.5) * range)), 0, 255),
+  ]
+}
+
+export function randomizeColorBrightness(color: ColorArray, range: number): ColorArray {
+  const value = Math.round((Math.random() - 0.5) * range);
+  return [
+    clamp(color[0] + value, 0, 255),
+    clamp(color[1] + value, 0, 255),
+    clamp(color[2] + value, 0, 255),
+  ]
+}
+
+export function colorShiftLightness(color: ColorArray, amount: number): ColorArray {
+  return [
+    clamp(Math.round(color[0] + amount), 0, 255),
+    clamp(Math.round(color[1] + amount), 0, 255),
+    clamp(Math.round(color[2] + amount), 0, 255),
+  ];
 }

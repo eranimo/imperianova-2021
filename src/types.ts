@@ -6,9 +6,17 @@ export type Size = {
   height: number;
 }
 
+export type Rect = {
+  x: number,
+  y: number,
+  width: number;
+  height: number;
+}
+
 export type Coord = [x: number, y: number];
 export type Line = [p1: Coord, p2: Coord];
 export type CoordArray = Coord[];
+export type Range = [low: number, high: number];
 
 export type AutogenObjectTile = {
   size: number,
@@ -17,6 +25,7 @@ export type AutogenObjectTile = {
 };
 
 export type ColorArray = [r: number, g: number, b: number];
+export type AlphaColorArray = [r: number, g: number, b: number, a: number];
 
 export enum Direction {
   SE = 0,

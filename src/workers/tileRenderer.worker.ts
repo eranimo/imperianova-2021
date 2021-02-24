@@ -13,22 +13,6 @@ const ENABLE_TRANSITIONS = true;
 const ENABLE_FEATURES = true;
 const ENABLE_ROADS = true;
 
-function lighter(color: ColorArray, amount: number): ColorArray {
-  return [
-    clamp(Math.round(color[0] * amount), 0, 255),
-    clamp(Math.round(color[1] * amount), 0, 255),
-    clamp(Math.round(color[2] * amount), 0, 255),
-  ];
-}
-
-function darker(color: ColorArray, amount: number): ColorArray {
-  return [
-    clamp(Math.round(color[0] * amount), 0, 255),
-    clamp(Math.round(color[1] * amount), 0, 255),
-    clamp(Math.round(color[2] * amount), 0, 255),
-  ];
-}
-
 const edgeCenterPoints: DirectionMap<Coord> = {
   [Direction.SE]: [56, 44 + OFFSET_Y],
   [Direction.NE]: [56, 15 + OFFSET_Y],

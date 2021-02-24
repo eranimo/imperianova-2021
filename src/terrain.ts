@@ -14,6 +14,13 @@ export enum TerrainType {
   __LENGTH,
 }
 
+export enum LandType {
+  NONE = 0,
+  PLAIN,
+  HILLS,
+  MOUNTAIN,
+}
+
 export const terrainTypeIndexOrder = [
   TerrainType.OCEAN,
   TerrainType.COAST,

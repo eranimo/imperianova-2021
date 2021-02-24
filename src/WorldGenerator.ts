@@ -6,7 +6,7 @@ import { Subject } from 'rxjs';
 import SimplexNoise from 'simplex-noise';
 import { MultiDictionary, Queue } from 'typescript-collections';
 import { adjacentDirections, Direction, directionIndexOrder, DirectionMap, oppositeDirections, Size } from './types';
-import { logGroupTime, octaveNoise } from './utils';
+import { logGroupTime, octaveNoise3D } from './utils';
 import { Edge, Hex, World, GridFactory } from './World';
 import { TerrainType } from './terrain';
 
@@ -53,19 +53,19 @@ export class WorldGenerator {
       const nx = 1 * Math.sin(inc) * Math.cos(azi);
       const ny = 1 * Math.sin(inc) * Math.sin(azi);
       const nz = 1 * Math.cos(inc);
-      const raw = octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5);
+      const raw = octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5);
       const value = (raw + 1) / 2;
       const height = value * 255;
       this.world.heightmap.set(hex.x, hex.y, height);
       if (Math.abs(lat) > 75) {
-        const isGlacial = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 2) + 1) / 2;
+        const isGlacial = (octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 2) + 1) / 2;
         const chance = (Math.abs(lat) - 75) / (90 - 75);
         if (isGlacial < chance) {
           this.world.terrain.set(hex.x, hex.y, TerrainType.GLACIAL);
           return;
         }
       }
-      const deg = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 2) + 1) / 2;
+      const deg = (octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 2) + 1) / 2;
       if (height < (sealevel - 20)) {
         this.world.terrain.set(hex.x, hex.y, TerrainType.OCEAN);
       } else if (height < sealevel) {
@@ -73,7 +73,7 @@ export class WorldGenerator {
       } else {
         if (Math.abs(lat) > 50 + (deg * 20)) {
           if (height < (sealevel + 25)) {
-            const isTaiga = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
+            const isTaiga = (octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
             this.world.terrain.set(hex.x, hex.y, isTaiga < 0.55 ? TerrainType.TUNDRA : TerrainType.TAIGA);
           } else {
             this.world.terrain.set(hex.x, hex.y, TerrainType.TUNDRA);
@@ -84,7 +84,7 @@ export class WorldGenerator {
           this.world.terrain.set(hex.x, hex.y, TerrainType.FOREST);
         } else {
           if (height < (sealevel + 10)) {
-            const isForested = (octaveNoise(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
+            const isForested = (octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5) + 1) / 2;
             this.world.terrain.set(hex.x, hex.y, isForested < 0.5 ? TerrainType.GRASSLAND : TerrainType.FOREST);
           } else if (height < (sealevel + 35)) {
             this.world.terrain.set(hex.x, hex.y, TerrainType.GRASSLAND);
