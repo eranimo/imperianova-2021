@@ -26,7 +26,7 @@ function getCellsBetweenPoints(line: CoordArray): CoordArray {
   return points;
 }
 
-class TileQuery {
+export class TileQuery {
   constructor(
     private gen: TileGen,
     public cells: CoordArray = []
@@ -155,6 +155,15 @@ class TileQuery {
         this.gen.setCellColor(cell, newColor);
       }
     }
+  }
+
+  has(cell: Coord) {
+    for (const [x, y] of this.cells) {
+      if (cell[0] === x && cell[1] === y) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -286,6 +295,7 @@ export class TileGen {
     pos: Coord,
     color: ColorArray,
     canFill?: (pos: Coord) => boolean,
+    useDiagonals: boolean = false,
   ) {
     const fillStack: CoordArray = [];
     fillStack.push(pos);
@@ -302,6 +312,12 @@ export class TileGen {
       fillStack.push([x - 1, y]);
       fillStack.push([x, y + 1]);
       fillStack.push([x, y - 1]);
+      if (useDiagonals) {
+        fillStack.push([x + 1, y + 1]);
+        fillStack.push([x - 1, y - 1]);
+        fillStack.push([x + 1, y - 1]);
+        fillStack.push([x - 1, y + 1]);
+      }
     }
     return new TileQuery(this, fillStack);
   }
