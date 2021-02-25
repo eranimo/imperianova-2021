@@ -393,25 +393,31 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
         adj1TerrainType === TerrainType.RIVER_MOUTH ||
         adj2TerrainType === TerrainType.RIVER_MOUTH
       ) {
+        transitionBorders.push([edgeTerrainType, TerrainType.RIVER_MOUTH]);
+        transitionBorders.push([TerrainType.RIVER_MOUTH, edgeTerrainType]);
         lineQuery = gen.query();
         let cp1: ControlPoint;
         let cp2: ControlPoint;
         let cp3: ControlPoint;
-        let riverMouthPoint: ControlPoint;
+        let riverMouthControlPoint: ControlPoint;
+        let riverMouthFillPoint: ControlPoint;
         if (adj1TerrainType === TerrainType.RIVER_MOUTH) {
           cp1 = ControlPoint.EDGE_ADJ1;
           cp2 = ControlPoint.ADJ1_INSIDE;
           cp3 = adj2TerrainType === edgeTerrainType ? ControlPoint.ADJ2_MED : ControlPoint.ADJ2_LOW;
-          riverMouthPoint = ControlPoint.ADJ1_MED;
+          riverMouthControlPoint = ControlPoint.ADJ1_MED;
+          riverMouthFillPoint = ControlPoint.CORNER_ADJ1;
         } else if (adj2TerrainType === TerrainType.RIVER_MOUTH) {
           cp1 = ControlPoint.EDGE_ADJ2;
           cp2 = ControlPoint.ADJ2_INSIDE;
           cp3 = adj1TerrainType === edgeTerrainType ? ControlPoint.ADJ1_MED : ControlPoint.ADJ1_LOW;
-          riverMouthPoint = ControlPoint.ADJ2_MED;
+          riverMouthControlPoint = ControlPoint.ADJ2_MED;
+          riverMouthFillPoint = ControlPoint.CORNER_ADJ2;
         }
         const p1 = addTileOffset(tileControlPoints[cp1]);
         const p2 = addTileOffset(tileControlPoints[cp2]);
         const p3 = addTileOffset(tileControlPoints[cp3])
+        const riverMouthPoint = addTileOffset(tileControlPoints[riverMouthControlPoint])
         const cp1_2_center = midpoint(p1, p2);
         const c1 = rotatePoint(
           cp1_2_center,
@@ -423,23 +429,30 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
           p2,
           -90,
         );
+        const riverMouthLine = gen.query().noisyLine(p1, p2, c1, c2, 3, 0.40)
         lineQuery
-          .noisyLine(
-            p1,
-            p2,
-            c1,
-            c2,
-            3,
-            0.40
-          )
+          .merge(riverMouthLine)
           .noisyLine(
             p2,
             p3,
             addTileOffset(tileControlPoints[ControlPoint.EDGE_CENTER]),
             addTileOffset(tileControlPoints[ControlPoint.INSIDE_CENTER]),
-            3,
-            0.50
+            EDGE_LINE_SUBDIVISIONS,
+            EDGE_LINE_RANGE,
           ).paint(edgeColor);
+        const riverMouthColor = terrainTypePrimaryColors.get(TerrainType.RIVER_MOUTH);
+        const riverMouthLineQuery = gen.query()
+          .merge(riverMouthLine)
+          .line(
+            p2,
+            riverMouthPoint
+          ).paint(riverMouthColor);
+        lineQuery.merge(riverMouthLineQuery);
+        gen.floodfill(
+          addTileOffset(tileControlPoints[riverMouthFillPoint]),
+          riverMouthColor,
+          cell => !riverMouthLineQuery.has(cell) && gen.isCellColor(cell, bgColor)
+        ).paint(riverMouthColor);
       } else {
         let cp1 = (adj1TerrainType === edgeTerrainType && edgeTerrainType !== TerrainType.RIVER)
           ? ControlPoint.ADJ1_MED

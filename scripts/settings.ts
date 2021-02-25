@@ -5,7 +5,7 @@ import { hexToRgb } from '../src/utils';
 
 
 const coastalColor: ColorArray = [39, 121, 201];
-const riverColor: ColorArray = [0, 0, 255];
+const riverColor: ColorArray = coastalColor; // [0, 0, 255];
 export const terrainTypePrimaryColors: Map<TerrainType, ColorArray> = new Map([
   [TerrainType.OCEAN, [29, 89, 150]],
   [TerrainType.COAST, coastalColor],
