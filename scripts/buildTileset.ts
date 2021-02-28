@@ -2,19 +2,21 @@
 
 import Jimp from "jimp";
 import path from 'path';
-import { TerrainType, terrainTransitions, terrainTypeTitles } from '../src/terrain';
-import { Direction, Corner, ColorArray, Coord, Rect, DirectionMap, CoordArray } from '../src/types';
+import fs from 'fs';
+import { TerrainType, terrainTransitions, terrainTypeTitles, TerrainTypeMap } from '../src/terrain';
+import { Direction, Corner, ColorArray, Coord, Rect, DirectionMap, CoordArray, Size } from '../src/types';
 import { newImage } from "./imageUtils";
 import { performance } from 'perf_hooks';
 import { TileGen, TileQuery } from './TileGen';
 import { terrainTypePrimaryColors, controlPoints, tileColorTransition } from './settings';
-import { TileSectionType, TileSectionEdge, HexTileSection, TileSectionEdgeMap, ControlPoint } from './types';
+import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition } from '../src/hexTile';
 import cliProgress from 'cli-progress';
 import { midpoint, rotatePoint, getNeighbors, midpointPoints, randomizePoint, randomizeColor, randomizeColorBrightness } from '../src/utils';
 import { randomizedPattern, noisyPattern, wavyPattern } from './patternGenerator';
 import Alea from 'alea';
+import { groupBy, isNumber } from "lodash";
 
-
+const SEED = 123;
 
 const baseTerrainTypes = [
   TerrainType.OCEAN,
@@ -77,16 +79,16 @@ const edgeTypeEdges = [
 ];
 
 const edgeToCenterControlPoint = {
-  [TileSectionEdge.SE]: ControlPoint.SE,
-  [TileSectionEdge.NE]: ControlPoint.NE,
-  [TileSectionEdge.N]: ControlPoint.N,
-  [TileSectionEdge.NW]: ControlPoint.NW,
-  [TileSectionEdge.SW]: ControlPoint.SW,
-  [TileSectionEdge.S]: ControlPoint.S,
-  [TileSectionEdge.CENTER]: ControlPoint.INSIDE_CENTER,
-  [TileSectionEdge.ADJ1]: ControlPoint.ADJ1_MED,
-  [TileSectionEdge.ADJ2]: ControlPoint.ADJ2_MED,
-  [TileSectionEdge.EDGE]: ControlPoint.EDGE_CENTER,
+  [TileSectionEdge.SE]: SectionControlPoint.SE,
+  [TileSectionEdge.NE]: SectionControlPoint.NE,
+  [TileSectionEdge.N]: SectionControlPoint.N,
+  [TileSectionEdge.NW]: SectionControlPoint.NW,
+  [TileSectionEdge.SW]: SectionControlPoint.SW,
+  [TileSectionEdge.S]: SectionControlPoint.S,
+  [TileSectionEdge.CENTER]: SectionControlPoint.INSIDE_CENTER,
+  [TileSectionEdge.ADJ1]: SectionControlPoint.ADJ1_MED,
+  [TileSectionEdge.ADJ2]: SectionControlPoint.ADJ2_MED,
+  [TileSectionEdge.EDGE]: SectionControlPoint.EDGE_CENTER,
 };
 
 const sectionTypeEdges = {
@@ -97,6 +99,16 @@ const sectionTypeEdges = {
   [TileSectionType.NW]: edgeTypeEdges,
   [TileSectionType.SW]: edgeTypeEdges,
   [TileSectionType.S]: edgeTypeEdges,
+};
+
+type PatternFunc = (query: TileQuery, size: Size, rng: () => number) => void;
+const terrainPatterns: Partial<Record<TerrainType, PatternFunc>> = {
+  [TerrainType.DESERT]: (query, size, rng) => {
+    query.applyPattern(wavyPattern(rng, size, 0, 15));
+  },
+  [TerrainType.GRASSLAND]: (query, size, rng) => {
+    query.applyPattern(noisyPattern(rng, 0.30));
+  }
 };
 
 const assetFolder = path.resolve(__dirname, '..', 'src', 'assets');
@@ -113,7 +125,7 @@ const templateTileHeight = 60;
 const tilePadding = 10;
 const columns = 50;
 
-const sectionTypeColors: Record<TileSectionType, ColorArray> = {
+const sectionTypeColors: TileSectionTypeMap<ColorArray> = {
   [TileSectionType.CENTER]: [69, 69, 69],
   [TileSectionType.SE]: [64, 191, 148],
   [TileSectionType.NE]: [191, 134, 64],
@@ -123,7 +135,7 @@ const sectionTypeColors: Record<TileSectionType, ColorArray> = {
   [TileSectionType.S]: [191, 64, 64],
 }
 
-const sectionTemplateIndex: Record<TileSectionType, number> = {
+const sectionTemplateIndex: TileSectionTypeMap<number> = {
   [TileSectionType.CENTER]: 1,
   [TileSectionType.SE]: 2,
   [TileSectionType.NE]: 7,
@@ -169,7 +181,7 @@ function getCommonTerrainTransitions(t1: TerrainType, t2: TerrainType) {
   return set;
 }
 
-function createTileDefs() {
+function createTileDefs(): HexTileSectionVariant[] {
   const tiles: HexTileSection[] = [];
 
   for (const terrainType of baseTerrainTypes) {
@@ -179,7 +191,7 @@ function createTileDefs() {
     // base tiles
     let count = 0;
     for (const sectionType of tileSectionTypeIndexOrder) {
-      let edgeTerrainTypes: TileSectionEdgeMap<TerrainType>;
+      let edgeTerrainTypes: Partial<TileSectionEdgeMap<TerrainType>>;
       // center sections do not have transitions
       const sectionEdgeTypes = sectionTypeEdges[sectionType];
       if (sectionType !== TileSectionType.CENTER) {
@@ -191,7 +203,7 @@ function createTileDefs() {
       tiles.push({
         type: sectionType,
         terrainType,
-        edgeTerrainTypes,
+        edgeTerrainTypes: edgeTerrainTypes as TileSectionEdgeMap<TerrainType>,
       });
       count++;
 
@@ -212,7 +224,7 @@ function createTileDefs() {
                         tiles.push({
                           type: sectionType,
                           terrainType,
-                          edgeTerrainTypes,
+                          edgeTerrainTypes: edgeTerrainTypes as TileSectionEdgeMap<TerrainType>,
                           edgeRoads: {
                             [TileSectionEdge.SE]: Boolean(road_se),
                             [TileSectionEdge.NE]: Boolean(road_ne),
@@ -220,7 +232,7 @@ function createTileDefs() {
                             [TileSectionEdge.NW]: Boolean(road_nw),
                             [TileSectionEdge.SW]: Boolean(road_sw),
                             [TileSectionEdge.S]: Boolean(road_s),
-                          }
+                          } as any,
                         });
                         count++;
                       }
@@ -313,7 +325,24 @@ function createTileDefs() {
 
     console.log('\n');
   }
-  return tiles;
+
+  const tileVariants = tiles.map(tile => {
+    const id = getSectionTileID(tile);
+    const seed = SEED;
+    return {
+      id,
+      seed,
+      tile,
+    };
+  });
+
+  for (const [id, tiles] of Object.entries(groupBy(tileVariants, 'id'))) {
+    if (tiles.length > 1) {
+      console.error(`Multiple tiles with ID ${id}`);
+    }
+  }
+
+  return tileVariants;
 }
 
 function addTileOffset(pos: Coord): Coord {
@@ -330,15 +359,19 @@ const CORNER_LINE_SUBDIVISIONS = 1;
 const CORNER_LINE_RANGE = 0.50;
 const ROAD_COLOR: ColorArray = [128, 83, 11];
 
-function buildTile(tile: HexTileSection, gen: TileGen) {
+function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
+  const { id, seed, tile } = tileVariant;
   const tileControlPoints = controlPoints[tile.type];
   const bgColor = terrainTypePrimaryColors.get(tile.terrainType);
   const transitionBorders: [TerrainType, TerrainType][] = [];
+  const textureTerrainTypes: TerrainType[] = [tile.terrainType];
 
   // paint BG
   gen.forEachCell(pos => {
     if (gen.isValidCell(pos)) {
       gen.setCellColor(pos, bgColor);
+    } else {
+      // gen.setCellColor(pos, [0, 0, 0]);
     }
   });
 
@@ -348,7 +381,7 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
     // roads
     if (tile.edgeRoads) {
       const roadPoints: CoordArray = [
-        addTileOffset(tileControlPoints[ControlPoint.HEX_CENTER])
+        addTileOffset(tileControlPoints[SectionControlPoint.HEX_CENTER])
       ];
       for (const sectionEdge of centerTypeEdges) {
         if (!tile.edgeRoads[sectionEdge]) continue;
@@ -384,35 +417,38 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
     const adj1TerrainType = tile.edgeTerrainTypes[TileSectionEdge.ADJ1];
     const adj2TerrainType = tile.edgeTerrainTypes[TileSectionEdge.ADJ2];
     const edgeColor = terrainTypePrimaryColors.get(edgeTerrainType);
+
     if (edgeTerrainType !== tile.terrainType) {
+      textureTerrainTypes.push(edgeTerrainType);
       transitionBorders.push([tile.terrainType, edgeTerrainType]);
       transitionBorders.push([edgeTerrainType, tile.terrainType]);
       let lineQuery = gen.query();
-      const c1 = addTileOffset(tileControlPoints[ControlPoint.EDGE_CENTER]);
+      const c1 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]);
       if (
         adj1TerrainType === TerrainType.RIVER_MOUTH ||
         adj2TerrainType === TerrainType.RIVER_MOUTH
       ) {
+        textureTerrainTypes.push(TerrainType.RIVER_MOUTH);
         transitionBorders.push([edgeTerrainType, TerrainType.RIVER_MOUTH]);
         transitionBorders.push([TerrainType.RIVER_MOUTH, edgeTerrainType]);
         lineQuery = gen.query();
-        let cp1: ControlPoint;
-        let cp2: ControlPoint;
-        let cp3: ControlPoint;
-        let riverMouthControlPoint: ControlPoint;
-        let riverMouthFillPoint: ControlPoint;
+        let cp1: SectionControlPoint;
+        let cp2: SectionControlPoint;
+        let cp3: SectionControlPoint;
+        let riverMouthControlPoint: SectionControlPoint;
+        let riverMouthFillPoint: SectionControlPoint;
         if (adj1TerrainType === TerrainType.RIVER_MOUTH) {
-          cp1 = ControlPoint.EDGE_ADJ1;
-          cp2 = ControlPoint.ADJ1_INSIDE;
-          cp3 = adj2TerrainType === edgeTerrainType ? ControlPoint.ADJ2_MED : ControlPoint.ADJ2_LOW;
-          riverMouthControlPoint = ControlPoint.ADJ1_MED;
-          riverMouthFillPoint = ControlPoint.CORNER_ADJ1;
+          cp1 = SectionControlPoint.EDGE_ADJ1;
+          cp2 = SectionControlPoint.ADJ1_INSIDE;
+          cp3 = adj2TerrainType === edgeTerrainType ? SectionControlPoint.ADJ2_MED : SectionControlPoint.ADJ2_LOW;
+          riverMouthControlPoint = SectionControlPoint.ADJ1_MED;
+          riverMouthFillPoint = SectionControlPoint.CORNER_ADJ1;
         } else if (adj2TerrainType === TerrainType.RIVER_MOUTH) {
-          cp1 = ControlPoint.EDGE_ADJ2;
-          cp2 = ControlPoint.ADJ2_INSIDE;
-          cp3 = adj1TerrainType === edgeTerrainType ? ControlPoint.ADJ1_MED : ControlPoint.ADJ1_LOW;
-          riverMouthControlPoint = ControlPoint.ADJ2_MED;
-          riverMouthFillPoint = ControlPoint.CORNER_ADJ2;
+          cp1 = SectionControlPoint.EDGE_ADJ2;
+          cp2 = SectionControlPoint.ADJ2_INSIDE;
+          cp3 = adj1TerrainType === edgeTerrainType ? SectionControlPoint.ADJ1_MED : SectionControlPoint.ADJ1_LOW;
+          riverMouthControlPoint = SectionControlPoint.ADJ2_MED;
+          riverMouthFillPoint = SectionControlPoint.CORNER_ADJ2;
         }
         const p1 = addTileOffset(tileControlPoints[cp1]);
         const p2 = addTileOffset(tileControlPoints[cp2]);
@@ -435,8 +471,8 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
           .noisyLine(
             p2,
             p3,
-            addTileOffset(tileControlPoints[ControlPoint.EDGE_CENTER]),
-            addTileOffset(tileControlPoints[ControlPoint.INSIDE_CENTER]),
+            addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]),
+            addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]),
             EDGE_LINE_SUBDIVISIONS,
             EDGE_LINE_RANGE,
           ).paint(edgeColor);
@@ -455,15 +491,15 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
         ).paint(riverMouthColor);
       } else {
         let cp1 = (adj1TerrainType === edgeTerrainType && edgeTerrainType !== TerrainType.RIVER)
-          ? ControlPoint.ADJ1_MED
-          : ControlPoint.ADJ1_LOW;
+          ? SectionControlPoint.ADJ1_MED
+          : SectionControlPoint.ADJ1_LOW;
         let cp2 = (adj2TerrainType === edgeTerrainType && edgeTerrainType !== TerrainType.RIVER)
-          ? ControlPoint.ADJ2_MED
-          : ControlPoint.ADJ2_LOW;
+          ? SectionControlPoint.ADJ2_MED
+          : SectionControlPoint.ADJ2_LOW;
         const p1 = addTileOffset(tileControlPoints[cp1]);
         const p2 = addTileOffset(tileControlPoints[cp2]);
-        const c1 = addTileOffset(tileControlPoints[ControlPoint.EDGE_CENTER]);
-        let c2 = addTileOffset(tileControlPoints[ControlPoint.INSIDE_CENTER]);
+        const c1 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]);
+        let c2 = addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]);
         const cp_center = midpoint(c1, c2);
         let range = EDGE_LINE_RANGE;
         if (edgeTerrainType === TerrainType.RIVER) {
@@ -477,34 +513,36 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
 
     // draw adj1 side line
     if (adj1TerrainType !== edgeTerrainType && adj1TerrainType !== TerrainType.RIVER_MOUTH) {
+      textureTerrainTypes.push(adj1TerrainType);
       transitionBorders.push([tile.terrainType, adj1TerrainType]);
       transitionBorders.push([adj1TerrainType, tile.terrainType]);
       transitionBorders.push([edgeTerrainType, adj1TerrainType]);
       transitionBorders.push([adj1TerrainType, edgeTerrainType]);
       const color = terrainTypePrimaryColors.get(adj1TerrainType);
-      const p1 = addTileOffset(tileControlPoints[ControlPoint.ADJ1_LOW]);
-      const p2 = addTileOffset(tileControlPoints[ControlPoint.EDGE_ADJ1]);
+      const p1 = addTileOffset(tileControlPoints[SectionControlPoint.ADJ1_LOW]);
+      const p2 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_ADJ1]);
       const center = midpoint(p1, p2);
       const c1 = rotatePoint(p1, center, 90);
       const c2 = rotatePoint(p1, center, -90);
-      const corner = addTileOffset(tileControlPoints[ControlPoint.CORNER_ADJ1]);
+      const corner = addTileOffset(tileControlPoints[SectionControlPoint.CORNER_ADJ1]);
       gen.query().noisyLine(p1, p2, c1, c2, CORNER_LINE_SUBDIVISIONS, CORNER_LINE_RANGE).paint(color);
       gen.floodfill(corner, color, cell => gen.isCellColor(cell, edgeColor), false).paint(color);
     }
 
     // draw adj2 side line
     if (adj2TerrainType !== edgeTerrainType && adj2TerrainType !== TerrainType.RIVER_MOUTH) {
+      textureTerrainTypes.push(adj2TerrainType);
       transitionBorders.push([tile.terrainType, adj2TerrainType]);
       transitionBorders.push([adj2TerrainType, tile.terrainType]);
       transitionBorders.push([edgeTerrainType, adj2TerrainType]);
       transitionBorders.push([adj2TerrainType, edgeTerrainType]);
       const color = terrainTypePrimaryColors.get(adj2TerrainType);
-      const p1 = addTileOffset(tileControlPoints[ControlPoint.ADJ2_LOW]);
-      const p2 = addTileOffset(tileControlPoints[ControlPoint.EDGE_ADJ2]);
+      const p1 = addTileOffset(tileControlPoints[SectionControlPoint.ADJ2_LOW]);
+      const p2 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_ADJ2]);
       const center = midpoint(p1, p2);
       const c1 = rotatePoint(p1, center, 90);
       const c2 = rotatePoint(p1, center, -90);
-      const corner = addTileOffset(tileControlPoints[ControlPoint.CORNER_ADJ2]);
+      const corner = addTileOffset(tileControlPoints[SectionControlPoint.CORNER_ADJ2]);
       gen.query().noisyLine(p1, p2, c1, c2, CORNER_LINE_SUBDIVISIONS, CORNER_LINE_RANGE).paint(color);
       gen.floodfill(corner, color, cell => gen.isCellColor(cell, edgeColor), false).paint(color);
     }
@@ -557,27 +595,29 @@ function buildTile(tile: HexTileSection, gen: TileGen) {
   }
 
   // apply textures
-  // const patternRng = Alea(Math.random());
-  // gen.getMatchingCells(bgColor)
-    // .applyPattern(randomizedPattern());
-    // .applyPattern(noisyPattern(rng, 0.30));
-    // .applyPattern(wavyPattern(patternRng, gen.size, 0, 20, 1.5));
+  for (const terrainType of textureTerrainTypes) {
+    if (terrainPatterns[terrainType]) {
+      const patternRng = Alea(Math.random());
+      const query = gen.getMatchingCells(terrainTypePrimaryColors.get(terrainType));
+      terrainPatterns[terrainType](query, gen.size, patternRng);
+    }
+  }
 }
 
 const progress = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
 
-async function buildTiles(template: Jimp, tiles: HexTileSection[]) {
-  const rows = Math.ceil(tiles.length / columns);
-  const width = columns * (tileWidth + tilePadding);
-  const height = rows * (tileHeight + tileOffset + tilePadding);
-  const tilesetImage = await newImage(width, height);
-  progress.start(tiles.length, 0);
-  tiles.forEach((tile, index) => {
+async function buildTiles(imageSize: Size, tileVariants: HexTileSectionVariant[]) {
+  const tilesetImage = await newImage(imageSize.width, imageSize.height);
+  progress.start(tileVariants.length, 0);
+  tileVariants.forEach((tileVariant, index) => {
     const [x, y] = getTileCoords(index, columns, tileWidth, tileHeight + tileOffset, tilePadding);
-    const template = sectionTemplates[tile.type];
+    const template = sectionTemplates[tileVariant.tile.type];
     const gen = new TileGen(
       tileSize,
       (pos: Coord) => {
+        if (pos[0] < 0 || pos[1] < 0 || pos[0] >= tileSize.width || pos[1] >= tileSize.height) {
+          return false;
+        }
         const x = pos[0];
         const y = pos[1] - tileOffset;
         if (y >= 0) {
@@ -586,7 +626,7 @@ async function buildTiles(template: Jimp, tiles: HexTileSection[]) {
         return false;
       }
     );
-    buildTile(tile, gen);
+    buildTile(tileVariant, gen);
     progress.update(index);
     gen.addToImage(tilesetImage, [x, y]);
   });
@@ -596,8 +636,28 @@ async function buildTiles(template: Jimp, tiles: HexTileSection[]) {
   return tilesetImage;
 }
 
+async function saveTilesetDefinition(
+  path: string,
+  rows: number,
+  imageSize: Size,
+  tileVariants: HexTileSectionVariant[]
+) {
+  const def: TilesetDefinition = {
+    name: 'Main tileset',
+    date: Date.now(),
+    imageSize,
+    tileSize: { width: tileWidth, height: tileHeight + tileOffset },
+    tileOffset,
+    tilePadding,
+    rows,
+    tiles: tileVariants.map((variant, index) => ({ index, variant })),
+  };
+  fs.writeFileSync(path, JSON.stringify(def, null, 2));
+}
+
 async function main() {
   const templatePath = path.resolve(assetFolder, 'hex-template-sections.png');
+  const definitionPath = path.resolve(assetFolder, 'tileset.json');
   const tilesetPath = path.resolve(assetFolder, 'tileset.png');
   const template = await Jimp.read(templatePath);
   for (const section of tileSectionTypeIndexOrder) {
@@ -606,18 +666,31 @@ async function main() {
   }
   
   // setup tiles
-  const tiles = createTileDefs();
-  console.log(`Creating tileset with ${tiles.length} tiles`);
+  const tileVariants = createTileDefs();
+  console.log(`Creating tileset with ${tileVariants.length} tiles`);
+
+  const rows = Math.ceil(tileVariants.length / columns);
+  const width = columns * (tileWidth + tilePadding);
+  const height = rows * (tileHeight + tileOffset + tilePadding);
+  const imageSize = { width, height };
 
   // build tileset
   const startTime = performance.now();
-  const tilesetImage = await buildTiles(template, tiles);
+  const tilesetImage = await buildTiles(imageSize, tileVariants);
   const endTime = performance.now();
   console.log(`Builing tileset (took ${endTime - startTime}ms)`);
   
   // save image
   console.log(`Saving tileset to ${tilesetPath}`);
   await tilesetImage.writeAsync(tilesetPath);
+
+  // save tileset file
+  await saveTilesetDefinition(
+    definitionPath,
+    rows,
+    imageSize,
+    tileVariants,
+  );
 }
 
 main().catch(err => {

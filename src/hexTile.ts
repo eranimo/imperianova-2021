@@ -1,5 +1,6 @@
-import { CornerMap, DirectionMap, Direction, Corner, ColorArray } from './types';
+import { CornerMap, DirectionMap, Direction, Corner, ColorArray, Size } from './types';
 import { TerrainType } from './terrain';
+import { isUndefined } from 'lodash';
 
 export type HexTile = {
   terrainType: TerrainType,
@@ -9,6 +10,78 @@ export type HexTile = {
 }
 
 export const OFFSET_Y = 10;
+
+export type HexTileSection = {
+  type: TileSectionType,
+  terrainType: TerrainType,
+  edgeTerrainTypes?: Partial<TileSectionEdgeMap<TerrainType>>,
+  edgeRoads?: Partial<TileSectionEdgeMap<boolean>>,
+}
+
+export type HexTileSectionVariant = {
+  id: number,
+  seed: number,
+  tile: HexTileSection,
+}
+
+export enum TileSectionType {
+  CENTER = 0,
+  SE,
+  NE,
+  N,
+  NW,
+  SW,
+  S,
+  __LENGTH
+}
+
+export type TileSectionTypeMap<T>= Record<Exclude<TileSectionType, TileSectionType.__LENGTH>, T>;
+
+export enum TileSectionEdge {
+  // edge types only:
+  CENTER,
+  EDGE,
+  ADJ1,
+  ADJ2,
+
+  // center type only:
+  SE,
+  NE,
+  N,
+  NW,
+  SW,
+  S,
+  __LENGTH,
+}
+
+export type TileSectionEdgeMap<T> = Record<Exclude<TileSectionEdge, TileSectionEdge.__LENGTH>, T>;
+
+export enum SectionControlPoint {
+  // center 
+  HEX_CENTER,
+  N,
+  NE,
+  SE,
+  S,
+  SW,
+  NW,
+
+  // edge
+  EDGE_CENTER,
+  ADJ1_LOW,
+  ADJ1_MED,
+  ADJ1_HIGH,
+  ADJ1_INSIDE,
+  ADJ2_LOW,
+  ADJ2_MED,
+  ADJ2_HIGH,
+  ADJ2_INSIDE,
+  CORNER_ADJ1,
+  CORNER_ADJ2,
+  EDGE_ADJ1,
+  EDGE_ADJ2,
+  INSIDE_CENTER,
+}
 
 export enum CellType {
   NONE = 0,
@@ -212,4 +285,55 @@ export function getHexTileID(hexTile: HexTile) {
     ((2 ** (13 + Direction.SW)) * Number(hexTile.edgeRoads[Direction.SW])) +
     ((2 ** (13 + Direction.S)) * Number(hexTile.edgeRoads[Direction.S]))
   );
+}
+
+export function getSectionTileID(sectionTile: HexTileSection) {
+  const edgeTerrainTypes = sectionTile.edgeTerrainTypes ?? {};
+  const edgeRoads = sectionTile.edgeRoads ?? {};
+  const getEdgeValue = (edgeType: TileSectionEdge) => {
+    if (isUndefined(edgeTerrainTypes[edgeType])) {
+      return 0;
+    }
+    return edgeTerrainTypes[edgeType];
+  }
+  return (
+      (((TileSectionType.__LENGTH) ** 0) * sectionTile.type)
+    + (((TerrainType.__LENGTH - 1) ** 1) * sectionTile.terrainType)
+
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.CENTER)) * getEdgeValue(TileSectionEdge.CENTER))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.EDGE)) * getEdgeValue(TileSectionEdge.EDGE))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.ADJ1)) * getEdgeValue(TileSectionEdge.ADJ1))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.ADJ2)) * getEdgeValue(TileSectionEdge.ADJ2))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.SE)) * getEdgeValue(TileSectionEdge.SE))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.NE)) * getEdgeValue(TileSectionEdge.NE))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.N)) * getEdgeValue(TileSectionEdge.N))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.NW)) * getEdgeValue(TileSectionEdge.NW))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.SW)) * getEdgeValue(TileSectionEdge.SW))
+    + (((TerrainType.__LENGTH - 1) ** (2 + TileSectionEdge.S)) * getEdgeValue(TileSectionEdge.S))
+
+    + ((2 ** (11 + TileSectionEdge.CENTER)) * Number(edgeRoads[TileSectionEdge.CENTER] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.EDGE)) * Number(edgeRoads[TileSectionEdge.EDGE] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.ADJ1)) * Number(edgeRoads[TileSectionEdge.ADJ1] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.ADJ2)) * Number(edgeRoads[TileSectionEdge.ADJ2] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.SE)) * Number(edgeRoads[TileSectionEdge.SE] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.NE)) * Number(edgeRoads[TileSectionEdge.NE] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.N)) * Number(edgeRoads[TileSectionEdge.N] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.NW)) * Number(edgeRoads[TileSectionEdge.NW] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.SW)) * Number(edgeRoads[TileSectionEdge.SW] ?? 0))
+    + ((2 ** (11 + TileSectionEdge.S)) * Number(edgeRoads[TileSectionEdge.S] ?? 0))
+  );
+}
+
+export type TilesetDefinition = {
+  name: string,
+  date: number,
+  imageSize: Size,
+  tileSize: Size,
+  rows: number,
+  tileOffset: number,
+  tilePadding: number,
+  tiles: Array<{
+    index: number,
+    variant: HexTileSectionVariant
+  }>,
 }

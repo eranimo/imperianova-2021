@@ -1,19 +1,22 @@
 import { TileGen } from './TileGen';
-import { ColorArray, Range, Coord } from '../src/types';
+import { ColorArray, Range, Coord, RNGFunction } from '../src/types';
+import { Image } from '../src/utils/Image';
 
+export type ObjectGenerator = (
+  rng: RNGFunction,
+) => Image;
 
 export function makeTree(
-  rng: () => number,
-  gen: TileGen,
+  rng: RNGFunction,
   barkColor: ColorArray,
   leafColor: ColorArray,
   shadowColor: ColorArray,
 ) {
-  const treeGen = new TileGen({ width: 20, height: 20 });
+  
 }
 
 export function makeBush(
-  rng: () => number,
+  rng: RNGFunction,
   leafColor: ColorArray,
   shadowColor: ColorArray,
 ) {
@@ -21,10 +24,21 @@ export function makeBush(
 }
 
 export function makeRock(
-  rng: () => number,
+  rng: RNGFunction,
   width: number,
   rockColor: ColorArray,
   shadowColor: ColorArray,
 ) {
   
+}
+
+export const makeHill = (
+  width: number,
+  height: number,
+  color: ColorArray,
+): ObjectGenerator => {
+  return (rng) => {
+    const img = new Image({ width, height });
+    return img;
+  }
 }

@@ -34,6 +34,11 @@ export class TileQuery {
     
   }
 
+  clear() {
+    this.cells = [];
+    return this;
+  }
+
   /**
    * Gets the cells in a noisy line from two points, using two control points
    * @param p1 First point
@@ -190,9 +195,7 @@ export class TileGen {
   ) {
     const { width, height } = size;
     const colorBuffer = new Uint8ClampedArray(width * height * 4);
-    const terrainBuffer = new Uint8ClampedArray(width * height * 4);
     colorBuffer.fill(0);
-    terrainBuffer.fill(0);
     this.color = ndarray(colorBuffer, [width, height, 4]);
   }
 
