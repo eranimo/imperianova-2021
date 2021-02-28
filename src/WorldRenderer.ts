@@ -136,8 +136,6 @@ export class WorldRenderer {
   }
 
   async render() {
-    // this.worldTileset.updateTileset();
-
     console.groupCollapsed('draw chunks');
     console.time('draw chunks');
     console.log(`Drawing ${this.chunkHexes.size} chunks`);
@@ -152,16 +150,10 @@ export class WorldRenderer {
       this.chunksLayer.addChild(terrainLayer as any);
       // chunkPromises.push(this.drawChunk(chunkKey));
       await this.drawChunk(chunkKey);
-      // this.worldTileset.updateTileset();
     }
     // await Promise.all(chunkPromises);
     console.timeEnd('draw chunks');
-    // this.worldTileset.updateTileset();
-    // this.worldTileset.saveTileStore();
     console.groupEnd();
-
-    // const sprite = new PIXI.Sprite(this.worldTileset.renderTexture);
-    // this.debugGraphics.addChild(sprite)
   }
 
   renderDebug() {

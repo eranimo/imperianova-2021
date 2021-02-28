@@ -5,4 +5,3 @@ main thread:
 - WorldGenerator: Generates world data for World
 - WorldViewer: PixiJS Application.
 - WorldRenderer
-- WorldTileset
