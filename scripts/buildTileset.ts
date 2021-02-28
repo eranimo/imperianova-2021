@@ -9,7 +9,7 @@ import { newImage } from "./imageUtils";
 import { performance } from 'perf_hooks';
 import { TileGen, TileQuery } from './TileGen';
 import { terrainTypePrimaryColors, controlPoints, tileColorTransition } from './settings';
-import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition } from '../src/hexTile';
+import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition, sectionTypeEdges, centerTypeEdges } from '../src/hexTile';
 import cliProgress from 'cli-progress';
 import { midpoint, rotatePoint, getNeighbors, midpointPoints, randomizePoint, randomizeColor, randomizeColorBrightness } from '../src/utils';
 import { randomizedPattern, noisyPattern, wavyPattern } from './patternGenerator';
@@ -36,6 +36,7 @@ const roadTerrainTypes = [
   TerrainType.TAIGA,
   TerrainType.TUNDRA,
   TerrainType.RIVER,
+  TerrainType.GLACIAL,
 ]
 
 const waterTerrainTypes = [
@@ -53,31 +54,6 @@ const tileSectionTypeIndexOrder = [
   TileSectionType.S,
 ];
 
-const directionToSectionType: DirectionMap<TileSectionType> = {
-  [Direction.SE]: TileSectionType.SE,
-  [Direction.NE]: TileSectionType.NE,
-  [Direction.N]: TileSectionType.N,
-  [Direction.NW]: TileSectionType.NW,
-  [Direction.SW]: TileSectionType.SW,
-  [Direction.S]: TileSectionType.S,
-};
-
-const centerTypeEdges = [
-  TileSectionEdge.SE,
-  TileSectionEdge.NE,
-  TileSectionEdge.N,
-  TileSectionEdge.NW,
-  TileSectionEdge.SW,
-  TileSectionEdge.S
-];
-
-const edgeTypeEdges = [
-  TileSectionEdge.CENTER,
-  TileSectionEdge.EDGE,
-  TileSectionEdge.ADJ1,
-  TileSectionEdge.ADJ2,
-];
-
 const edgeToCenterControlPoint = {
   [TileSectionEdge.SE]: SectionControlPoint.SE,
   [TileSectionEdge.NE]: SectionControlPoint.NE,
@@ -89,16 +65,6 @@ const edgeToCenterControlPoint = {
   [TileSectionEdge.ADJ1]: SectionControlPoint.ADJ1_MED,
   [TileSectionEdge.ADJ2]: SectionControlPoint.ADJ2_MED,
   [TileSectionEdge.EDGE]: SectionControlPoint.EDGE_CENTER,
-};
-
-const sectionTypeEdges = {
-  [TileSectionType.CENTER]: centerTypeEdges,
-  [TileSectionType.SE]: edgeTypeEdges,
-  [TileSectionType.NE]: edgeTypeEdges,
-  [TileSectionType.N]: edgeTypeEdges,
-  [TileSectionType.NW]: edgeTypeEdges,
-  [TileSectionType.SW]: edgeTypeEdges,
-  [TileSectionType.S]: edgeTypeEdges,
 };
 
 type PatternFunc = (query: TileQuery, size: Size, rng: () => number) => void;
@@ -177,8 +143,20 @@ function getTerrainTransitions(terrainType: TerrainType) {
 function getCommonTerrainTransitions(t1: TerrainType, t2: TerrainType) {
   const t1Transitions = getTerrainTransitions(t1);
   const t2Transitions = getTerrainTransitions(t2);
-  const set = new Set([...t1Transitions].filter(x => t2Transitions.has(x)));
+  // const set = new Set([...t1Transitions].filter(x => t2Transitions.has(x)));
+  const set = new Set([
+    ...t1Transitions,
+    ...t2Transitions,
+  ]);
   return set;
+}
+
+function isRiverTerrain(terrainType) {
+  return (
+    terrainType === TerrainType.RIVER ||
+    terrainType === TerrainType.RIVER_SOURCE ||
+    terrainType === TerrainType.RIVER_MOUTH
+  )
 }
 
 function createTileDefs(): HexTileSectionVariant[] {
@@ -260,18 +238,20 @@ function createTileDefs(): HexTileSectionVariant[] {
     console.log(`\tAdded ${count} base variants`);
     
     // edge section transitions
-    if (terrainTypeTransitions.size > 0) {
+    const edgeTerrainTransitions = terrainTypeTransitions;
+    edgeTerrainTransitions.add(terrainType);
+    if (terrainType !== TerrainType.OCEAN && terrainType !== TerrainType.COAST) {
+      edgeTerrainTransitions.add(TerrainType.RIVER);
+    }
+    if (edgeTerrainTransitions.size > 0) {
       console.log(`\tAdding transitions:`, Array.from(terrainTypeTransitions).map(t => terrainTypeTitles[t]).join(', '));
       let count = 0;
       for (const sectionType of tileSectionTypeIndexOrder) {
         if (sectionType !== TileSectionType.CENTER) {
-          const edgeTerrainTransitions = terrainTypeTransitions;
-          if (terrainType !== TerrainType.OCEAN && terrainType !== TerrainType.COAST) {
-            edgeTerrainTransitions.add(TerrainType.RIVER);
-          }
           for (const edgeTerrainType of edgeTerrainTransitions) {
             // only create side terrain variants for terrain types the hex terrain type has in common with the edge terrain type
             const sideTerrainTransitions = getCommonTerrainTransitions(terrainType, edgeTerrainType);
+            sideTerrainTransitions.add(terrainType);
             sideTerrainTransitions.add(edgeTerrainType);
             if (terrainType === TerrainType.COAST) {
               sideTerrainTransitions.add(TerrainType.RIVER_MOUTH);
@@ -280,8 +260,10 @@ function createTileDefs(): HexTileSectionVariant[] {
               !waterTerrainTypes.includes(terrainType) &&
               edgeTerrainType !== TerrainType.RIVER
             ) {
+              sideTerrainTransitions.add(TerrainType.RIVER);
               sideTerrainTransitions.add(TerrainType.RIVER_SOURCE);
             }
+            console.log('\tside transitions:', Array.from(sideTerrainTransitions).map(t => terrainTypeTitles[t]).join(', '));
             for (const adj1TerrainType of sideTerrainTransitions) {
               for (const adj2TerrainType of sideTerrainTransitions) {
                 console.log(`\t (section: ${sectionType}) edge: ${terrainTypeTitles[edgeTerrainType]}\t - adj1: ${terrainTypeTitles[adj1TerrainType]} \t adj2: ${terrainTypeTitles[adj2TerrainType]}`);
@@ -321,6 +303,8 @@ function createTileDefs(): HexTileSectionVariant[] {
         }
       }
       console.log(`\tAdded ${count} transition variants`);
+    } else {
+      console.log(`\tNo transitions for type`);
     }
 
     console.log('\n');
@@ -354,7 +338,7 @@ function addTileOffset(pos: Coord): Coord {
 
 const EDGE_LINE_SUBDIVISIONS = 5;
 const EDGE_LINE_RANGE = 0.60;
-const EDGE_RIVER_RANGE = 0.70;
+const EDGE_RIVER_RANGE = 0.50;
 const CORNER_LINE_SUBDIVISIONS = 1;
 const CORNER_LINE_RANGE = 0.50;
 const ROAD_COLOR: ColorArray = [128, 83, 11];
@@ -511,8 +495,18 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
       gen.floodfill(c1, edgeColor, cell => !lineQuery.has(cell) && gen.isCellColor(cell, bgColor)).paint(edgeColor);
     }
 
+    const terrainTransitions = getTerrainTransitions(tile.terrainType);
+    const edgeTerrainTransitions = getTerrainTransitions(edgeTerrainType);
     // draw adj1 side line
-    if (adj1TerrainType !== edgeTerrainType && adj1TerrainType !== TerrainType.RIVER_MOUTH) {
+    if (
+      // if adjacent terrain is different than the edge terrain
+      adj1TerrainType !== edgeTerrainType
+      // if adjacent terrain is not a river mouth
+      && adj1TerrainType !== TerrainType.RIVER_MOUTH
+      && edgeTerrainType !== tile.terrainType && !isRiverTerrain(adj1TerrainType)
+        ? terrainTransitions.has(adj1TerrainType) && edgeTerrainTransitions.has(adj1TerrainType)
+        : true
+    ) {
       textureTerrainTypes.push(adj1TerrainType);
       transitionBorders.push([tile.terrainType, adj1TerrainType]);
       transitionBorders.push([adj1TerrainType, tile.terrainType]);
@@ -530,7 +524,13 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
     }
 
     // draw adj2 side line
-    if (adj2TerrainType !== edgeTerrainType && adj2TerrainType !== TerrainType.RIVER_MOUTH) {
+    if (
+      adj2TerrainType !== edgeTerrainType
+      && adj2TerrainType !== TerrainType.RIVER_MOUTH
+      && edgeTerrainType !== tile.terrainType && !isRiverTerrain(adj2TerrainType)
+        ? terrainTransitions.has(adj2TerrainType) && edgeTerrainTransitions.has(adj2TerrainType)
+        : true
+    ) {
       textureTerrainTypes.push(adj2TerrainType);
       transitionBorders.push([tile.terrainType, adj2TerrainType]);
       transitionBorders.push([adj2TerrainType, tile.terrainType]);
@@ -643,13 +643,12 @@ async function saveTilesetDefinition(
   tileVariants: HexTileSectionVariant[]
 ) {
   const def: TilesetDefinition = {
-    name: 'Main tileset',
-    date: Date.now(),
     imageSize,
     tileSize: { width: tileWidth, height: tileHeight + tileOffset },
     tileOffset,
     tilePadding,
     rows,
+    columns,
     tiles: tileVariants.map((variant, index) => ({ index, variant })),
   };
   fs.writeFileSync(path, JSON.stringify(def, null, 2));

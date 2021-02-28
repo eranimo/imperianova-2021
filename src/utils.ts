@@ -343,36 +343,6 @@ export function pickRandom<T>(array: Array<T>, rng: () => number = Math.random) 
   return array[Math.round(rng() * (array.length - 1))];
 }
 
-export class MultiMap<K, V> {
-  private map: Map<K,V[]>;
-
-  constructor() {
-    this.map = new Map();
-  }
-
-  add(key: K, value: V) {
-    if (this.map.has(key)) {
-      this.map.get(key).push(value);
-    } else {
-      this.map.set(key, [value]);
-    }
-  }
-
-  get(key: K): V[] {
-    return this.map.get(key);
-  }
-
-  has(key: K) {
-    return this.map.has(key);
-  }
-
-  *[Symbol.iterator](): Iterator<[K, V[]]> {
-    for (const key of this.map.keys()) {
-      yield [key, this.map.get(key)];
-    }
-  }
-}
-
 export const randomizePoint = (point: Coord, range: number): Coord => {
   return [
     point[0] + (Math.round((Math.random() - 0.5) * range)),

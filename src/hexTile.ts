@@ -35,7 +35,27 @@ export enum TileSectionType {
   __LENGTH
 }
 
+export const tileSectionTypeTitles = {
+  [TileSectionType.CENTER]: 'CENTER',
+  [TileSectionType.SE]: 'SE',
+  [TileSectionType.NE]: 'NE',
+  [TileSectionType.N]: 'N',
+  [TileSectionType.NW]: 'NW',
+  [TileSectionType.SW]: 'SW',
+  [TileSectionType.S]: 'S',
+};
+
 export type TileSectionTypeMap<T>= Record<Exclude<TileSectionType, TileSectionType.__LENGTH>, T>;
+
+export const tileSectionRenderOrder = [
+  TileSectionType.N,
+  TileSectionType.NE,
+  TileSectionType.NW,
+  TileSectionType.CENTER,
+  TileSectionType.SE,
+  TileSectionType.SW,
+  TileSectionType.S,
+];
 
 export enum TileSectionEdge {
   // edge types only:
@@ -53,6 +73,22 @@ export enum TileSectionEdge {
   S,
   __LENGTH,
 }
+
+export const tileSectionEdgeTitles = {
+  // edge types only:
+  [TileSectionEdge.CENTER]: 'CENTER',
+  [TileSectionEdge.EDGE]: 'EDGE',
+  [TileSectionEdge.ADJ1]: 'ADJ1',
+  [TileSectionEdge.ADJ2]: 'ADJ2',
+
+  // center type only:
+  [TileSectionEdge.SE]: 'SE',
+  [TileSectionEdge.NE]: 'NE',
+  [TileSectionEdge.N]: 'N',
+  [TileSectionEdge.NW]: 'NW',
+  [TileSectionEdge.SW]: 'SW',
+  [TileSectionEdge.S]: 'S',
+};
 
 export type TileSectionEdgeMap<T> = Record<Exclude<TileSectionEdge, TileSectionEdge.__LENGTH>, T>;
 
@@ -324,16 +360,79 @@ export function getSectionTileID(sectionTile: HexTileSection) {
   );
 }
 
+export const centerTypeEdges: TileSectionEdge[] = [
+  TileSectionEdge.SE,
+  TileSectionEdge.NE,
+  TileSectionEdge.N,
+  TileSectionEdge.NW,
+  TileSectionEdge.SW,
+  TileSectionEdge.S
+];
+
+export const edgeTypeEdges: TileSectionEdge[] = [
+  TileSectionEdge.CENTER,
+  TileSectionEdge.EDGE,
+  TileSectionEdge.ADJ1,
+  TileSectionEdge.ADJ2,
+];
+
+export const sectionTypeEdges = {
+  [TileSectionType.CENTER]: centerTypeEdges,
+  [TileSectionType.SE]: edgeTypeEdges,
+  [TileSectionType.NE]: edgeTypeEdges,
+  [TileSectionType.N]: edgeTypeEdges,
+  [TileSectionType.NW]: edgeTypeEdges,
+  [TileSectionType.SW]: edgeTypeEdges,
+  [TileSectionType.S]: edgeTypeEdges,
+};
+
+export const edgeSectionTypes: TileSectionType[] = [
+  TileSectionType.SE,
+  TileSectionType.NE,
+  TileSectionType.N,
+  TileSectionType.NW,
+  TileSectionType.SW,
+  TileSectionType.S,
+]
+
+export const centerEdgeToDirection: Map<TileSectionEdge, Direction> = new Map([
+  [TileSectionEdge.SE, Direction.SE],
+  [TileSectionEdge.NE, Direction.NE],
+  [TileSectionEdge.N, Direction.N],
+  [TileSectionEdge.NW, Direction.NW],
+  [TileSectionEdge.SW, Direction.SW],
+  [TileSectionEdge.S, Direction.S],
+]);
+
+export const directionToSectionType: Map<Direction, TileSectionType> = new Map([
+  [Direction.SE, TileSectionType.SE],
+  [Direction.NE, TileSectionType.NE],
+  [Direction.N, TileSectionType.N],
+  [Direction.NW, TileSectionType.NW],
+  [Direction.SW, TileSectionType.SW],
+  [Direction.S, TileSectionType.S],
+]);
+
+export const sectionTypeToDirection: Map<TileSectionType, Direction> = new Map([
+  [TileSectionType.SE, Direction.SE],
+  [TileSectionType.NE, Direction.NE],
+  [TileSectionType.N, Direction.N],
+  [TileSectionType.NW, Direction.NW],
+  [TileSectionType.SW, Direction.SW],
+  [TileSectionType.S, Direction.S],
+]);
+
+export type TilesetDefinitionTile = {
+  index: number,
+  variant: HexTileSectionVariant
+};
+
 export type TilesetDefinition = {
-  name: string,
-  date: number,
   imageSize: Size,
   tileSize: Size,
   rows: number,
+  columns: number,
   tileOffset: number,
   tilePadding: number,
-  tiles: Array<{
-    index: number,
-    variant: HexTileSectionVariant
-  }>,
+  tiles: TilesetDefinitionTile[],
 }

@@ -18,6 +18,7 @@ class WorldManager {
     private minimapCanvas: HTMLCanvasElement,
   ) {
     const size = worldMapCanvas.getBoundingClientRect();
+    PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST;
     this.app = new PIXI.Application({
       width: size.width,
       height: size.height,
@@ -76,6 +77,8 @@ class WorldManager {
         hexRivers: world.riverHexPairs.get(hex),
         hexTile: renderer.hexTiles.get(hex),
       });
+      const tileSections = assets.hexSectionTileset.getHexTileSections(world, hex);
+      console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
     });
 
     (window as any).moveToHex = (x: number, y: number) => {

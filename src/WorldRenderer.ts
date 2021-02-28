@@ -3,8 +3,7 @@ import * as PIXI from 'pixi.js';
 import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap } from './types';
 import { Hex, World } from './World';
 import { terrainColors, terrainTransitions, TerrainType } from './terrain';
-import { WorldTileset } from './WorldTileset';
-import { HexTile, OFFSET_Y } from './hexTile';
+import { HexTile, OFFSET_Y, tileSectionRenderOrder } from './hexTile';
 import { Assets } from './AssetLoader';
 
 const CHUNK_WIDTH = 10;
@@ -24,18 +23,15 @@ export class WorldRenderer {
   hexChunk: Map<string, string>;
   chunkHexes: Map<string, { x: number, y: number }[]>;
   chunkDrawTimes: Map<string, number>;
-  worldTileset: WorldTileset;
   chunksLayer: PIXI.Container;
   hexTiles: Map<Hex, HexTile>;
 
-  constructor(private app: PIXI.Application, world: World, assets: Assets) {
+  constructor(private app: PIXI.Application, world: World, private assets: Assets) {
     this.world = world;
     this.debugGraphics = new PIXI.Graphics();
     this.worldWidth = this.world.hexgrid.pointWidth();
     this.worldHeight = this.world.hexgrid.pointHeight();
     this.chunksLayer = new PIXI.Container();
-    this.worldTileset = new WorldTileset(this.app.renderer, assets);
-    console.log(this.worldTileset);
 
     this.hexTiles = new Map();
     
@@ -67,9 +63,7 @@ export class WorldRenderer {
       }
     }
 
-    this.worldTileset.load().then(() => {
-      this.onNewWorld(world);
-    });
+    this.onNewWorld(world);
 
     // setup events
     document.addEventListener('keyup', event => {
@@ -110,119 +104,45 @@ export class WorldRenderer {
     // TODO: why casting is required
     (terrainLayer as any).position.set((minX), (minY));
 
-    const hexPromises: Promise<number>[] = [];
-
-    hexes.forEach((hex, index) => {
-      const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
+    hexes.forEach((pos, index) => {
+      const terrainType = this.world.getTerrainForCoord(pos.x, pos.y);
       if (terrainType === TerrainType.NONE) return;
-      const hexObj = this.world.getHex(hex.x, hex.y);
-      const cornerTerrainTypes: Partial<CornerMap<TerrainType>> = {};
+      const hex = this.world.getHex(pos.x, pos.y);
+      const tileSections = this.assets.hexSectionTileset.getHexTileSections(this.world, hex);
 
-      const edgeTerrainTypes = this.world.getHexNeighborTerrain(hex.x, hex.y);
-      for (let direction of directionIndexOrder) {
-        const edgeTerrainType = edgeTerrainTypes[direction];
-        if (!(
-          terrainTransitions[terrainType] && 
-          terrainTransitions[terrainType].includes(edgeTerrainType)
-        )) {
-          edgeTerrainTypes[direction] = terrainType;
+      const textures = tileSections.map(tileSection => {
+        const variants = this.assets.hexSectionTileset.getTexturesForTileSection(tileSection);
+        if (variants.length === 0) {
+          return null;
         }
-      }
-      if (this.world.hexRiverEdges.containsKey(hexObj)) {
-        const riverDirections = this.world.hexRiverEdges.getValue(hexObj);
-        for (let dir of riverDirections) {
-          edgeTerrainTypes[dir] = TerrainType.RIVER;
-        }
-      }
-
-      // if any of this hex's neighbors have a river between them,
-      // set this corner feature to river
-      for (let corner of cornerIndexOrder) {
-        const directions = cornerDirections[corner];
-        const neighborOne = this.world.getHexNeighbor(hex.x, hex.y, directions[0]);
-        const neighborTwo = this.world.getHexNeighbor(hex.x, hex.y, directions[1]);
-        if (
-          // river on corners
-          // if this hex has rivers with either of the neighbors
-          (this.world.riverHexPairs.has(hexObj) && 
-          this.world.riverHexPairs.get(hexObj).has(neighborTwo))
-          ||
-          (this.world.riverHexPairs.has(hexObj) && 
-          this.world.riverHexPairs.get(hexObj).has(neighborOne))
-        ) {
-          cornerTerrainTypes[corner] = TerrainType.RIVER;
-        } else if (
-          // river mouth / end
-          this.world.riverHexPairs.has(neighborOne) && this.world.riverHexPairs.get(neighborOne).has(neighborTwo)
-        ) {
-          // cornerTerrainTypes[corner] = TerrainType.RIVER_MOUTH;
-          cornerTerrainTypes[corner] = (terrainType === TerrainType.OCEAN || terrainType === TerrainType.COAST)
-            ? TerrainType.RIVER_MOUTH
-            : TerrainType.RIVER_SOURCE;
-        } else {
-          let cornerTerrainType: TerrainType = TerrainType.NONE;
-          if (neighborOne && neighborTwo) {
-            const neighborOneTerrain = this.world.getTerrainForCoord(neighborOne.x, neighborOne.y);
-            const neighborTwoTerrain = this.world.getTerrainForCoord(neighborTwo.x, neighborTwo.y);
-            let transitionTerrainType: TerrainType;
-            if (terrainTransitions[neighborOneTerrain] && terrainTransitions[neighborOneTerrain].includes(neighborTwoTerrain)) {
-              transitionTerrainType = neighborTwoTerrain;
-            } else if (terrainTransitions[neighborTwoTerrain] && terrainTransitions[neighborTwoTerrain].includes(neighborOneTerrain)) {
-              transitionTerrainType = neighborOneTerrain;
-            } else if (neighborOneTerrain === neighborTwoTerrain) {
-              transitionTerrainType = neighborOneTerrain;
-            }
-            if (terrainTransitions[terrainType] && terrainTransitions[terrainType].includes(transitionTerrainType)) {
-              cornerTerrainType = transitionTerrainType;
-            } else {
-              cornerTerrainType = terrainType;
-            }
-          } else {
-            cornerTerrainType = terrainType;
-          }
-          cornerTerrainTypes[corner] = cornerTerrainType;
-        }
-      }
-
-      let edgeRoads: Partial<DirectionMap<boolean>> = {};
-      for (const direction of directionIndexOrder) {
-        edgeRoads[direction] = this.world.hasRoad(hexObj, direction);
-      }
-
-      const hexTile = {
-        terrainType,
-        edgeTerrainTypes,
-        cornerTerrainTypes: cornerTerrainTypes as CornerMap<TerrainType>,
-        edgeRoads: edgeRoads as DirectionMap<boolean>,
-      };
-      hexPromises.push(this.worldTileset.getTile(hexTile));
-      const hexTileID = this.worldTileset.getTileID(hexTile);
-      const texture = this.worldTileset.getTextureForID(hexTileID);
+        // TODO: pick random variant?
+        return variants[0];
+      });
       const [ x, y ] = hexPosititions[index];
-      if (texture) {
-        terrainLayer.addFrame(
-          texture,
-          (x - minX),
-          (y - OFFSET_Y - minY),
-        );
+      for (const texture of textures) {
+        if (texture) {
+          terrainLayer.addFrame(
+            texture,
+            (x - minX),
+            (y - OFFSET_Y - minY),
+          );
+        }
       }
-      this.hexTiles.set(hexObj, hexTile);
-    });
 
-    await Promise.all(hexPromises);
+    });
 
     const timeEnd = Date.now();
     this.chunkDrawTimes.set(chunkKey, timeEnd - timeStart);
   }
 
   async render() {
-    this.worldTileset.updateTileset();
+    // this.worldTileset.updateTileset();
 
     console.groupCollapsed('draw chunks');
     console.time('draw chunks');
     console.log(`Drawing ${this.chunkHexes.size} chunks`);
     const bitmaps = [
-      new PIXI.Texture(this.worldTileset.renderTexture.baseTexture),
+      new PIXI.Texture(this.assets.hexSectionTileset.tilesetTexture),
     ];
 
     const chunkPromises: Promise<void>[] = [];
@@ -236,8 +156,8 @@ export class WorldRenderer {
     }
     // await Promise.all(chunkPromises);
     console.timeEnd('draw chunks');
-    this.worldTileset.updateTileset();
-    this.worldTileset.saveTileStore();
+    // this.worldTileset.updateTileset();
+    // this.worldTileset.saveTileStore();
     console.groupEnd();
 
     // const sprite = new PIXI.Sprite(this.worldTileset.renderTexture);
