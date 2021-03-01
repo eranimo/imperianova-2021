@@ -338,7 +338,7 @@ function addTileOffset(pos: Coord): Coord {
 
 const EDGE_LINE_SUBDIVISIONS = 5;
 const EDGE_LINE_RANGE = 0.60;
-const EDGE_RIVER_RANGE = 0.40;
+const EDGE_RIVER_RANGE = 0.35;
 const EDGE_RIVER_SUBDIVISIONS = 5;
 const CORNER_LINE_SUBDIVISIONS = 1;
 const CORNER_LINE_RANGE = 0.50;
@@ -502,7 +502,7 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
           const center = getPositionAlongTheLine(
             addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]),
             addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]),
-            0.40,
+            0.45,
           );
           const line1cp = getControlPoints(p1, center);
           const line2cp = getControlPoints(center, p2);
