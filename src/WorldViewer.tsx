@@ -53,6 +53,8 @@ class WorldManager {
     this.viewport.addChild(renderer.chunksLayer);
     this.viewport.addChild(renderer.debugGraphics);
 
+    this.viewport$.subscribe(viewport => renderer.onViewportMoved(viewport));
+
     const minimapSize = this.minimapCanvas.getBoundingClientRect();
     const minimapApp = new PIXI.Application({
       width: minimapSize.width,
@@ -73,7 +75,6 @@ class WorldManager {
       console.log({
         hexRoads: world.hexRoads.get(hex),
         hexRivers: world.riverHexPairs.get(hex),
-        hexTile: renderer.hexTiles.get(hex),
       });
       const tileSections = assets.hexSectionTileset.getHexTileSections(world, hex);
       console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
