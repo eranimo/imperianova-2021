@@ -11,7 +11,7 @@ import { TileGen, TileQuery } from './TileGen';
 import { terrainTypePrimaryColors, controlPoints, tileColorTransition } from './settings';
 import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition, sectionTypeEdges, centerTypeEdges } from '../src/hexTile';
 import cliProgress from 'cli-progress';
-import { midpoint, rotatePoint, getNeighbors, midpointPoints, randomizePoint, randomizeColor, randomizeColorBrightness } from '../src/utils';
+import { midpoint, rotatePoint, getNeighbors, midpointPoints, randomizePoint, randomizeColor, randomizeColorBrightness, getPositionAlongTheLine } from '../src/utils';
 import { randomizedPattern, noisyPattern, wavyPattern } from './patternGenerator';
 import Alea from 'alea';
 import { groupBy, isNumber } from "lodash";
@@ -338,10 +338,26 @@ function addTileOffset(pos: Coord): Coord {
 
 const EDGE_LINE_SUBDIVISIONS = 5;
 const EDGE_LINE_RANGE = 0.60;
-const EDGE_RIVER_RANGE = 0.60;
+const EDGE_RIVER_RANGE = 0.40;
+const EDGE_RIVER_SUBDIVISIONS = 5;
 const CORNER_LINE_SUBDIVISIONS = 1;
 const CORNER_LINE_RANGE = 0.50;
 const ROAD_COLOR: ColorArray = [128, 83, 11];
+
+function getControlPoints(p1: Coord, p2: Coord) {
+  const center = midpoint(p1, p2);
+  const c1 = rotatePoint(
+    center,
+    p2,
+    90,
+  );
+  const c2 = rotatePoint(
+    center,
+    p2,
+    -90,
+  );
+  return [c1, c2];
+}
 
 function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
   const { id, seed, tile } = tileVariant;
@@ -474,23 +490,38 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
           cell => !riverMouthLineQuery.has(cell) && gen.isCellColor(cell, bgColor)
         ).paint(riverMouthColor);
       } else {
-        let cp1 = (adj1TerrainType === edgeTerrainType && edgeTerrainType !== TerrainType.RIVER)
-          ? SectionControlPoint.ADJ1_MED
-          : SectionControlPoint.ADJ1_LOW;
-        let cp2 = (adj2TerrainType === edgeTerrainType && edgeTerrainType !== TerrainType.RIVER)
-          ? SectionControlPoint.ADJ2_MED
-          : SectionControlPoint.ADJ2_LOW;
-        const p1 = addTileOffset(tileControlPoints[cp1]);
-        const p2 = addTileOffset(tileControlPoints[cp2]);
-        const c1 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]);
-        let c2 = addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]);
-        const cp_center = midpoint(c1, c2);
-        let range = EDGE_LINE_RANGE;
         if (edgeTerrainType === TerrainType.RIVER) {
-          c2 = cp_center;
-          range = EDGE_RIVER_RANGE;
+          let cp1 = adj1TerrainType === edgeTerrainType
+            ? SectionControlPoint.ADJ1_MED
+            : SectionControlPoint.ADJ1_LOW;
+          let cp2 = adj2TerrainType === edgeTerrainType
+            ? SectionControlPoint.ADJ2_MED
+            : SectionControlPoint.ADJ2_LOW;
+          const p1 = addTileOffset(tileControlPoints[cp1]);
+          const p2 = addTileOffset(tileControlPoints[cp2]);
+          const center = midpoint(
+            addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]),
+            addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER])
+          );
+          const line1cp = getControlPoints(p1, center);
+          const line2cp = getControlPoints(center, p2);
+          lineQuery
+            .noisyLine(p1, center, line1cp[0], line1cp[1], EDGE_RIVER_SUBDIVISIONS, EDGE_RIVER_RANGE)
+            .noisyLine(center, p2, line2cp[0], line2cp[1], EDGE_RIVER_SUBDIVISIONS, EDGE_RIVER_RANGE)
+            .paint(edgeColor);
+        } else {
+          let cp1 = (adj1TerrainType === edgeTerrainType)
+            ? SectionControlPoint.ADJ1_MED
+            : SectionControlPoint.ADJ1_LOW;
+          let cp2 = (adj2TerrainType === edgeTerrainType)
+            ? SectionControlPoint.ADJ2_MED
+            : SectionControlPoint.ADJ2_LOW;
+          const p1 = addTileOffset(tileControlPoints[cp1]);
+          const p2 = addTileOffset(tileControlPoints[cp2]);
+          const c1 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]);
+          let c2 = addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]);
+          lineQuery.noisyLine(p1, p2, c1, c2, EDGE_LINE_SUBDIVISIONS, EDGE_LINE_RANGE).paint(edgeColor);
         }
-        lineQuery.noisyLine(p1, p2, c1, c2, EDGE_LINE_SUBDIVISIONS, range).paint(edgeColor);
       }
       gen.floodfill(c1, edgeColor, cell => !lineQuery.has(cell) && gen.isCellColor(cell, bgColor)).paint(edgeColor);
     }
