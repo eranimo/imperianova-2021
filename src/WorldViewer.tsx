@@ -1,8 +1,6 @@
 import { Viewport } from 'pixi-viewport';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { BehaviorSubject } from 'rxjs';
-import { Tileset } from './Tileset';
-import { AutogenObjectTile } from './types';
 import { GridFactory, World } from './World';
 import { WorldMinimap } from './WorldMinimap';
 import { WorldRenderer } from './WorldRenderer';

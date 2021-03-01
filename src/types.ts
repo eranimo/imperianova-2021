@@ -1,4 +1,3 @@
-import { Tileset } from "./Tileset";
 import { TerrainType } from './terrain';
 
 export type Size = {
@@ -19,13 +18,6 @@ export type Coord = [x: number, y: number];
 export type Line = [p1: Coord, p2: Coord];
 export type CoordArray = Coord[];
 export type Range = [low: number, high: number];
-
-export type AutogenObjectTile = {
-  size: number,
-  terrainTypes: TerrainType[],
-  used: boolean,
-};
-
 export type ColorArray = [r: number, g: number, b: number];
 export type AlphaColorArray = [r: number, g: number, b: number, a: number];
 
@@ -152,16 +144,3 @@ export const cornerIndexOrder = [
   Corner.TOP_LEFT,
   Corner.TOP_RIGHT,
 ];
-
-export type ExportedTileset = {
-  buffer: Uint8ClampedArray,
-  size: Size,
-  tiles: {
-    [tileID: number]: {
-      x: number,
-      y: number,
-      width: number,
-      height: number,
-    }
-  }
-}
