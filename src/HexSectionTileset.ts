@@ -118,13 +118,8 @@ export class HexSectionTileset {
       const [adj1, adj2] = adjacentDirections[dir];
       const adj1TerrainType = neighborTerrainTypes[adj1];
       const adj2TerrainType = neighborTerrainTypes[adj2];
-      if (hexEdgeTerrainType === TerrainType.RIVER) {
-        edgeTerrainTypes[TileSectionEdge.ADJ1] = TerrainType.RIVER;
-        edgeTerrainTypes[TileSectionEdge.ADJ2] = TerrainType.RIVER;
-      } else {
-        edgeTerrainTypes[TileSectionEdge.ADJ1] = adj1TerrainType;
-        edgeTerrainTypes[TileSectionEdge.ADJ2] = adj2TerrainType;
-      }
+      edgeTerrainTypes[TileSectionEdge.ADJ1] = adj1TerrainType;
+      edgeTerrainTypes[TileSectionEdge.ADJ2] = adj2TerrainType;
       const edgeHex = world.getHexNeighbor(hex.x, hex.y, dir);
       const adj1Hex = world.getHexNeighbor(hex.x, hex.y, adj1);
       const adj2Hex = world.getHexNeighbor(hex.x, hex.y, adj2);

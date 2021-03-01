@@ -338,7 +338,7 @@ function addTileOffset(pos: Coord): Coord {
 
 const EDGE_LINE_SUBDIVISIONS = 5;
 const EDGE_LINE_RANGE = 0.60;
-const EDGE_RIVER_RANGE = 0.50;
+const EDGE_RIVER_RANGE = 0.60;
 const CORNER_LINE_SUBDIVISIONS = 1;
 const CORNER_LINE_RANGE = 0.50;
 const ROAD_COLOR: ColorArray = [128, 83, 11];
