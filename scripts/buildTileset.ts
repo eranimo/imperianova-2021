@@ -499,9 +499,10 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
             : SectionControlPoint.ADJ2_LOW;
           const p1 = addTileOffset(tileControlPoints[cp1]);
           const p2 = addTileOffset(tileControlPoints[cp2]);
-          const center = midpoint(
+          const center = getPositionAlongTheLine(
             addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]),
-            addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER])
+            addTileOffset(tileControlPoints[SectionControlPoint.INSIDE_CENTER]),
+            0.40,
           );
           const line1cp = getControlPoints(p1, center);
           const line2cp = getControlPoints(center, p2);
