@@ -31,6 +31,8 @@ export class WorldRenderer {
   chunkHexes: Map<string, { x: number, y: number }[]>;
   chunkDrawTimes: Map<string, number>;
   chunksLayer: PIXI.Container;
+  overlayLayer: PIXI.ParticleContainer;
+  hexOverlaySprites: Map<Hex, PIXI.Sprite>;
   cull: cull.Simple;
 
   constructor(
@@ -53,6 +55,9 @@ export class WorldRenderer {
     this.hexChunk = new Map();
     this.chunkHexes = new Map();
     const { width, height } = world.gridSize;
+
+    this.hexOverlaySprites = new Map();
+    this.overlayLayer = new PIXI.ParticleContainer(width * height, { tint: true });
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x += 2) {
@@ -83,8 +88,10 @@ export class WorldRenderer {
 
     // setup events
     document.addEventListener('keyup', event => {
-      if (event.key === 'g') {
+      if (event.key === 'd') {
         this.debugGraphics.visible = !this.debugGraphics.visible;
+      } else if (event.key === 'o') {
+        this.overlayLayer.visible = !this.overlayLayer.visible;
       }
     });
   }
@@ -142,15 +149,22 @@ export class WorldRenderer {
         return variants[0];
       });
       const [ x, y ] = this.world.getHexPosition(hex.x, hex.y);
+      const tx = (x - minX);
+      const ty = (y - OFFSET_Y - minY);
       for (const texture of textures) {
         if (texture) {
-          terrainLayer.addFrame(
-            texture,
-            (x - minX),
-            (y - OFFSET_Y - minY),
-          );
+          terrainLayer.addFrame(texture, tx, ty);
         }
       }
+
+      // overlay
+      const overlaySprite = new PIXI.Sprite(this.assets.hexTemplate.fullHex);
+      overlaySprite.tint = terrainColors[terrainType];
+      overlaySprite.position.set(x, y);
+      overlaySprite.width = this.assets.hexTemplate.size.width;
+      overlaySprite.height = this.assets.hexTemplate.size.height;
+      this.overlayLayer.addChild(overlaySprite);
+      this.hexOverlaySprites.set(hex, overlaySprite);
     });
     this.chunkDirty.set(chunkKey, false);
 
@@ -181,11 +195,10 @@ export class WorldRenderer {
     console.groupCollapsed('draw chunks');
     console.time('draw chunks');
     console.log(`Drawing ${this.chunkHexes.size} chunks`);
-    const bitmaps = [
-      new PIXI.Texture(this.assets.hexSectionTileset.tilesetTexture),
-    ];
     for (const chunkKey of this.chunkHexes.keys()) {
-      const terrainLayer = new CompositeRectTileLayer(0, bitmaps);
+      const terrainLayer = new CompositeRectTileLayer(0, [
+        new PIXI.Texture(this.assets.hexSectionTileset.tilesetTexture),
+      ]);
       this.chunkTileLayers.set(chunkKey, [terrainLayer]);
       this.chunksLayer.addChild(terrainLayer as any);
       this.setupChunk(chunkKey);
@@ -205,6 +218,22 @@ export class WorldRenderer {
         y: hex.center().y + point.y,
       };
       const [firstCorner, ...otherCorners] = corners
+
+      // // terrain type indicator
+      // const color = terrainColors[this.world.terrain.get(hex.x, hex.y)];
+      // if (color) {
+      //   this.debugGraphics.lineStyle(1, color);
+      //   this.debugGraphics.beginFill(color);
+      //   for (const direction of directionIndexOrder) {
+      //     const [c1, c2] = directionCorners[direction];
+      //     this.debugGraphics.drawPolygon([
+      //       new PIXI.Point(corners[c1].x, corners[c1].y),
+      //       new PIXI.Point(center.x, center.y),
+      //       new PIXI.Point(corners[c2].x, corners[c2].y),
+      //     ])
+      //   }
+      //   this.debugGraphics.endFill();
+      // }
 
       // draw grid lines
       this.debugGraphics.lineStyle(1, 0xFFFFFF);
@@ -233,15 +262,6 @@ export class WorldRenderer {
             this.debugGraphics.lineTo(x, y);
           }
         }
-      }
-
-      // terrain type indicator
-      this.debugGraphics.lineStyle(1, 0xFFFFFF);
-      const color = terrainColors[this.world.terrain.get(hex.x, hex.y)];
-      if (color) {
-        this.debugGraphics.beginFill(color);
-        this.debugGraphics.drawCircle(center.x, center.y, 5);
-        this.debugGraphics.endFill();
       }
     });
   }

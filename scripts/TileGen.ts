@@ -108,9 +108,11 @@ export class TileQuery {
   // add all neighbors of the current cells to the query
   expand(
     canExpand: (pos: Coord) => boolean,
+    query: TileQuery = this,
   ) {
     const newCells = [];
-    for (const cell of this.cells) {
+    const cells = query.cells;
+    for (const cell of cells) {
       const w: Coord = [cell[0] - 1, cell[1]];
       const e: Coord = [cell[0] + 1, cell[1]];
       const n: Coord = [cell[0], cell[1] - 1];
@@ -141,6 +143,11 @@ export class TileQuery {
       ...this.cells,
       ...query.cells,
     ];
+    return this;
+  }
+
+  filter(func: (cell: Coord) => boolean) {
+    this.cells = this.cells.filter(func);
     return this;
   }
 

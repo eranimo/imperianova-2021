@@ -51,6 +51,7 @@ class WorldManager {
     this.viewport.worldWidth = renderer.worldWidth;
     this.viewport.worldHeight = renderer.worldHeight;
     this.viewport.addChild(renderer.chunksLayer);
+    this.viewport.addChild(renderer.overlayLayer);
     this.viewport.addChild(renderer.debugGraphics);
 
     this.viewport$.subscribe(viewport => renderer.onViewportMoved(viewport));

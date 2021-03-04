@@ -69,12 +69,12 @@ const edgeToCenterControlPoint = {
 
 type PatternFunc = (query: TileQuery, size: Size, rng: () => number) => void;
 const terrainPatterns: Partial<Record<TerrainType, PatternFunc>> = {
-  [TerrainType.DESERT]: (query, size, rng) => {
-    query.applyPattern(wavyPattern(rng, size, 0, 15));
-  },
-  [TerrainType.GRASSLAND]: (query, size, rng) => {
-    query.applyPattern(noisyPattern(rng, 0.30));
-  }
+  // [TerrainType.DESERT]: (query, size, rng) => {
+  //   query.applyPattern(wavyPattern(rng, size, 0, 15, 15));
+  // },
+  // [TerrainType.GRASSLAND]: (query, size, rng) => {
+  //   query.applyPattern(noisyPattern(rng, 0.30));
+  // }
 };
 
 const assetFolder = path.resolve(__dirname, '..', 'src', 'assets');
@@ -418,11 +418,11 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
     const adj2TerrainType = tile.edgeTerrainTypes[TileSectionEdge.ADJ2];
     const edgeColor = terrainTypePrimaryColors.get(edgeTerrainType);
 
+    let lineQuery = gen.query();
     if (edgeTerrainType !== tile.terrainType) {
       textureTerrainTypes.push(edgeTerrainType);
       transitionBorders.push([tile.terrainType, edgeTerrainType]);
       transitionBorders.push([edgeTerrainType, tile.terrainType]);
-      let lineQuery = gen.query();
       const c1 = addTileOffset(tileControlPoints[SectionControlPoint.EDGE_CENTER]);
       if (
         adj1TerrainType === TerrainType.RIVER_MOUTH ||
@@ -602,6 +602,26 @@ function buildTile(tileVariant: HexTileSectionVariant, gen: TileGen) {
     }
     for (const [cell, color] of ops) {
       gen.setCellColor(cell, color);
+    }
+
+    // improved borders
+    if (
+      edgeTerrainType === TerrainType.RIVER
+      || adj1TerrainType === TerrainType.RIVER || adj1TerrainType === TerrainType.RIVER_SOURCE
+      || adj2TerrainType === TerrainType.RIVER || adj2TerrainType === TerrainType.RIVER_SOURCE
+    ) {
+      const riverColor = terrainTypePrimaryColors.get(TerrainType.RIVER);
+      // const riverBank = gen.getMatchingCells(bgColor)
+      //   .filter(cell => gen.someNeighbor(cell, n => gen.isCellColor(n, riverColor)));
+      // riverBank.expand(cell => gen.isCellColor(cell, bgColor)).paint([0, 0, 0]);
+
+      const riverEdge = gen.getMatchingCells(riverColor)
+        .filter(cell => gen.someNeighbor(cell, n => !gen.isCellColor(n, riverColor) && gen.isValidCell(n)));
+      const isEdgeColor = cell => gen.isCellColor(cell, riverColor);
+      const band1 = riverEdge
+        .expand(isEdgeColor)
+        .paint([18, 132, 227]);
+      gen.query().expand(isEdgeColor, band1).expand(isEdgeColor).paint([17, 125, 212]);
     }
 
     // draw roads

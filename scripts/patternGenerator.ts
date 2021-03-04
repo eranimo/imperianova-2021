@@ -49,6 +49,7 @@ export const wavyPattern = (
   size: Size,
   xPeriod: number = 0,
   yPeriod: number = 10,
+  brightnessRange: number = 25,
   turbPower: number = 1,
   turbSize: number = 32,
 ): PatternGenerator => {
@@ -69,6 +70,6 @@ export const wavyPattern = (
   return (coord: Coord, color: ColorArray) => {
     const xyValue = coord[0] * xPeriod / size.width + coord[1] * yPeriod / size.height + turbPower * turbulence(coord, turbSize) / 256.0;
     const v = Math.abs(Math.sin(xyValue * Math.PI));
-    return colorShiftLightness(color, v * 25);
+    return colorShiftLightness(color, v * brightnessRange);
   };
 }

@@ -4,16 +4,16 @@ import { TileSectionType, SectionControlPoint, TileSectionTypeMap } from '../src
 import { hexToRgb } from '../src/utils';
 
 
-const coastalColor: ColorArray = [39, 121, 201];
+const coastalColor: ColorArray = [16, 122, 201];
 const riverColor: ColorArray = coastalColor; // [0, 0, 255];
 export const terrainTypePrimaryColors: Map<TerrainType, ColorArray> = new Map([
-  [TerrainType.OCEAN, [29, 89, 150]],
+  [TerrainType.OCEAN, [14, 108, 181]],
   [TerrainType.COAST, coastalColor],
   [TerrainType.RIVER, riverColor],
   [TerrainType.RIVER_SOURCE, riverColor],
   [TerrainType.RIVER_MOUTH, riverColor],
-  [TerrainType.GRASSLAND, [120, 178, 76]],
-  [TerrainType.FOREST, [96, 145, 59]],
+  [TerrainType.GRASSLAND, [74, 150, 28]],
+  [TerrainType.FOREST, [77, 138, 40]],
   [TerrainType.DESERT, [233, 216, 121]],
   [TerrainType.TAIGA, [107, 138, 84]],
   [TerrainType.TUNDRA, [122, 135, 112]],
@@ -48,9 +48,9 @@ const waterTransitions: [TerrainType, TileColorTransition][] = [
 ];
 const riverTransitions: [TerrainType, TileColorTransition][] = [
   [TerrainType.COAST, beachTransition],
-  [TerrainType.RIVER, beachTransition],
-  [TerrainType.RIVER_MOUTH, beachTransition],
-  [TerrainType.RIVER_SOURCE, beachTransition],
+  // [TerrainType.RIVER, beachTransition],
+  // [TerrainType.RIVER_MOUTH, beachTransition],
+  // [TerrainType.RIVER_SOURCE, beachTransition],
 ];
 const desertWaterTransition: TileColorTransition = {
   borderColor: [219, 199, 87],
@@ -61,8 +61,8 @@ export const tileColorTransition: Map<TerrainType, Map<TerrainType, TileColorTra
     TerrainType.OCEAN,
     new Map<TerrainType, TileColorTransition>([
       [TerrainType.COAST, {
-        borderColor: hexToRgb('#2166AA'),
-        accentColor: hexToRgb('#1F5FA0'),
+        borderColor: [15,114,189],
+        accentColor: [14,111,185],
       }]
     ])
   ],
@@ -71,23 +71,23 @@ export const tileColorTransition: Map<TerrainType, Map<TerrainType, TileColorTra
     new Map<TerrainType, TileColorTransition>([
       ...waterTransitions,
       [TerrainType.OCEAN, {
-        borderColor: hexToRgb('#236CB5'),
-        accentColor: hexToRgb('#2573BF'),
+        borderColor: [15,116,193],
+        accentColor: [16,119,197],
       }]
     ]),
   ],
-  [
-    TerrainType.RIVER,
-    new Map<TerrainType, TileColorTransition>(waterTransitions),
-  ],
-  [
-    TerrainType.RIVER_MOUTH,
-    new Map<TerrainType, TileColorTransition>(waterTransitions),
-  ],
-  [
-    TerrainType.RIVER_SOURCE,
-    new Map<TerrainType, TileColorTransition>(waterTransitions),
-  ],
+  // [
+  //   TerrainType.RIVER,
+  //   new Map<TerrainType, TileColorTransition>(waterTransitions),
+  // ],
+  // [
+  //   TerrainType.RIVER_MOUTH,
+  //   new Map<TerrainType, TileColorTransition>(waterTransitions),
+  // ],
+  // [
+  //   TerrainType.RIVER_SOURCE,
+  //   new Map<TerrainType, TileColorTransition>(waterTransitions),
+  // ],
   [
     TerrainType.GRASSLAND,
     new Map<TerrainType, TileColorTransition>([
