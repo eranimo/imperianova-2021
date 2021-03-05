@@ -12,6 +12,7 @@ import { chunk } from 'lodash';
 import { rgbaToInt } from 'jimp/*';
 import { colorToNumber } from './utils';
 import { Color } from './utils/Color';
+import { Subject } from 'rxjs';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -20,11 +21,13 @@ const DEBUG_RIVER_COLOR = 0x0000FF;
 const DEBUG_ROAD_COLOR = 0x80530b;
 
 type RegionOptions = {
+  name: string;
   hexes: Hex[],
   color: Color,
 }
 
 class Region {
+  name: string;
   hexes: Set<Hex>;
   color: Color;
 
@@ -33,6 +36,7 @@ class Region {
     options: RegionOptions
   ) {
     this.hexes = new Set(options.hexes);
+    this.name = options.name;
     for (const hex of this.hexes) {
       this.map.setHexRegion(hex, this);
     }
@@ -48,26 +52,46 @@ class Region {
     this.hexes.delete(hex);
     this.map.removeHexRegion(hex, this);
   }
+
+  get labelPosition(): Coord {
+    let x = 0;
+    let y = 0;
+    for (const hex of this.hexes) {
+      const [nx, ny] = this.map.world.getHexPosition(hex.x, hex.y);
+      x += nx + 32;
+      y += ny + 30;
+    }
+    return [
+      x / this.hexes.size,
+      y / this.hexes.size,
+    ]
+  }
 }
 
 class RegionMap {
   public regions: Set<Region>;
   private hexRegions: Map<Hex, Region>;
   borderTilesetID: Map<Hex, Map<Direction, number>>;
+  public regionAdded$: Subject<Region>;
+  public regionRemoved$: Subject<Region>;
 
-  constructor(private world: World) {
+  constructor(public world: World) {
     this.regions = new Set();
     this.hexRegions = new Map();
     this.borderTilesetID = new Map();
+    this.regionAdded$ = new Subject();
+    this.regionRemoved$ = new Subject();
   }
 
   createRegion(options: RegionOptions) {
     const region = new Region(this, options);
     this.regions.add(region);
+    this.regionAdded$.next(region);
     return region;
   }
 
   deleteRegion(region: Region) {
+    this.regionRemoved$.next(region);
     this.regions.delete(region); 
   }
 
@@ -136,6 +160,27 @@ class RegionMap {
 }
 
 
+class MapLabel extends PIXI.Container {
+  labelText: PIXI.Text;
+
+  constructor(
+    label: string,
+    fontSize: number,
+  ) {
+    super();
+    this.labelText = new PIXI.Text(label, {
+      font: '32px Tahoma',
+      fill: '#FFF',
+      align: 'center',
+      stroke: '#111',
+      strokeThickness: 3,
+    });
+    this.labelText.anchor.set(0.5);
+    this.addChild(this.labelText);
+  }
+}
+
+
 export class WorldRenderer {
   public world: World;
   public debugGraphics: PIXI.Graphics;
@@ -155,6 +200,8 @@ export class WorldRenderer {
   regionLayer: PIXI.ParticleContainer;
   hexOverlaySprites: Map<Hex, PIXI.Sprite>;
   cull: cull.Simple;
+  labelContainer: PIXI.Container;
+  regionLabels: Map<Region, MapLabel>;
 
   regionMap: RegionMap;
 
@@ -175,9 +222,11 @@ export class WorldRenderer {
     
     this.chunkTileLayers = new Map();
     this.chunkDrawTimes = new Map();
+    this.regionLabels = new Map();
     this.hexChunk = new Map();
     this.chunkHexes = new Map();
     const { width, height } = world.gridSize;
+    this.labelContainer = new PIXI.Container();
 
     this.hexOverlaySprites = new Map();
     this.overlayLayer = new PIXI.ParticleContainer(width * height, { tint: true });
@@ -223,6 +272,11 @@ export class WorldRenderer {
         this.gridLayer.visible = !this.gridLayer.visible;
       }
     });
+
+
+    console.log(this.regionMap);
+    this.regionMap.regionAdded$.subscribe(region => this.addRegionLabel(region));
+    this.regionMap.regionRemoved$.subscribe(region => this.removeRegionLabel(region));
   }
 
   onViewportMoved(viewport: Viewport) {
@@ -355,6 +409,20 @@ export class WorldRenderer {
     // await Promise.all(chunkPromises);
     console.timeEnd('draw chunks');
     console.groupEnd();
+  }
+
+  private addRegionLabel(region: Region) {
+    const [x, y] = region.labelPosition;
+    const label = new MapLabel(region.name, 16)
+    label.position.set(x, y);
+    console.log(label);
+    this.regionLabels.set(region, label);
+    this.labelContainer.addChild(label);
+  }
+
+  private removeRegionLabel(region: Region) {
+    const label = this.regionLabels.get(region)
+    this.labelContainer.removeChild(label);
   }
 
   renderDebug() {

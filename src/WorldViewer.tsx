@@ -57,8 +57,10 @@ class WorldManager {
     this.viewport.addChild(renderer.gridLayer);
     this.viewport.addChild(renderer.regionLayer);
     this.viewport.addChild(renderer.debugGraphics);
+    this.viewport.addChild(renderer.labelContainer);
 
     renderer.regionMap.createRegion({
+      name: 'One',
       hexes: [
         world.getHex(5, 5),
         world.getHex(6, 5),
@@ -67,6 +69,7 @@ class WorldManager {
       color: new Color([0, 255, 0], 255),
     });
     renderer.regionMap.createRegion({
+      name: 'Two',
       hexes: [
         world.getHex(6, 6),
         world.getHex(6, 7),
