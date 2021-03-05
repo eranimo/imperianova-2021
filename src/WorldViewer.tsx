@@ -5,6 +5,8 @@ import { GridFactory, World } from './World';
 import { WorldMinimap } from './WorldMinimap';
 import { WorldRenderer } from './WorldRenderer';
 import { AssetContext, Assets } from './AssetLoader';
+import { Color } from './utils/Color';
+import { random } from 'lodash';
 
 class WorldManager {
   viewport$: BehaviorSubject<Viewport>;
@@ -52,7 +54,27 @@ class WorldManager {
     this.viewport.worldHeight = renderer.worldHeight;
     this.viewport.addChild(renderer.chunksLayer);
     this.viewport.addChild(renderer.overlayLayer);
+    this.viewport.addChild(renderer.gridLayer);
+    this.viewport.addChild(renderer.regionLayer);
     this.viewport.addChild(renderer.debugGraphics);
+
+    renderer.regionMap.createRegion({
+      hexes: [
+        world.getHex(5, 5),
+        world.getHex(6, 5),
+      ],
+      // color: Color.fromHSL(random(0, 360), .90, .90),
+      color: new Color([0, 255, 0], 255),
+    });
+    renderer.regionMap.createRegion({
+      hexes: [
+        world.getHex(6, 6),
+        world.getHex(6, 7),
+      ],
+      color: Color.fromHSL(random(0, 360), .70, .50),
+    });
+    renderer.regionMap.update();
+
 
     this.viewport$.subscribe(viewport => renderer.onViewportMoved(viewport));
 
@@ -79,6 +101,7 @@ class WorldManager {
       });
       const tileSections = assets.hexSectionTileset.getHexTileSections(world, hex);
       console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
+      console.log('regions', renderer.regionMap.borderTilesetID.get(hex));
     });
 
     (window as any).moveToHex = (x: number, y: number) => {

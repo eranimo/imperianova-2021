@@ -1,6 +1,6 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord } from './types';
+import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord, ColorArray, Direction, adjacentDirections } from './types';
 import { Hex, World } from './World';
 import { terrainColors, terrainTransitions, TerrainType } from './terrain';
 import { HexTile, OFFSET_Y, tileSectionRenderOrder } from './hexTile';
@@ -9,12 +9,131 @@ import cull from 'pixi-cull';
 import SimplexNoise from 'simplex-noise';
 import { Viewport } from 'pixi-viewport';
 import { chunk } from 'lodash';
+import { rgbaToInt } from 'jimp/*';
+import { colorToNumber } from './utils';
+import { Color } from './utils/Color';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
 
 const DEBUG_RIVER_COLOR = 0x0000FF;
 const DEBUG_ROAD_COLOR = 0x80530b;
+
+type RegionOptions = {
+  hexes: Hex[],
+  color: Color,
+}
+
+class Region {
+  hexes: Set<Hex>;
+  color: Color;
+
+  constructor(
+    private map: RegionMap,
+    options: RegionOptions
+  ) {
+    this.hexes = new Set(options.hexes);
+    for (const hex of this.hexes) {
+      this.map.setHexRegion(hex, this);
+    }
+    this.color = options.color;
+  }
+
+  add(hex: Hex) {
+    this.hexes.add(hex);
+    this.map.setHexRegion(hex, this);
+  }
+
+  remove(hex: Hex) {
+    this.hexes.delete(hex);
+    this.map.removeHexRegion(hex, this);
+  }
+}
+
+class RegionMap {
+  public regions: Set<Region>;
+  private hexRegions: Map<Hex, Region>;
+  borderTilesetID: Map<Hex, Map<Direction, number>>;
+
+  constructor(private world: World) {
+    this.regions = new Set();
+    this.hexRegions = new Map();
+    this.borderTilesetID = new Map();
+  }
+
+  createRegion(options: RegionOptions) {
+    const region = new Region(this, options);
+    this.regions.add(region);
+    return region;
+  }
+
+  deleteRegion(region: Region) {
+    this.regions.delete(region); 
+  }
+
+  setHexRegion(hex: Hex, region: Region) {
+    this.hexRegions.set(hex, region);
+    const neighbors = this.world.getHexNeighbors(hex);
+    this.calculateHexTilesetID(hex);
+  }
+
+  update() {
+    for (const region of this.regions) {
+      for (const hex of region.hexes) {
+        this.calculateHexTilesetID(hex);
+      }
+    }
+  }
+
+  private calculateHexTilesetID(hex: Hex) {
+    const neighbors = this.world.getHexNeighbors(hex);
+    let idMap = new Map();
+    const directionToColumn = {
+      [Direction.SE]: 0,
+      [Direction.S]: 1,
+      [Direction.SW]: 2,
+      [Direction.NW]: 3,
+      [Direction.N]: 4,
+      [Direction.NE]: 5,
+    }
+    for (const dir of directionIndexOrder) {
+      const neighbor = neighbors[dir] as Hex;
+      const [adj1, adj2] = adjacentDirections[dir];
+      const adj1Neighbor = neighbors[adj1] as Hex;
+      const adj2Neighbor = neighbors[adj2] as Hex;
+      if (this.getHexRegion(neighbor) != this.getHexRegion(hex)) {
+        idMap.set(dir, directionToColumn[dir]);
+      } else if (
+        this.getHexRegion(adj1Neighbor) != this.getHexRegion(hex) &&
+        this.getHexRegion(adj2Neighbor) != this.getHexRegion(hex)
+      ) {
+        idMap.set(dir, 18 + directionToColumn[dir]);
+      } else if (this.getHexRegion(adj1Neighbor) != this.getHexRegion(hex)) {
+        idMap.set(dir, 12 + directionToColumn[dir]);
+      } else if (this.getHexRegion(adj2Neighbor) != this.getHexRegion(hex)) {
+        idMap.set(dir, 6 + directionToColumn[dir]);
+      }
+    }
+    this.borderTilesetID.set(hex, idMap);
+  }
+
+  removeHexRegion(hex: Hex, region: Region) {
+    if (this.hexRegions.get(hex) == region) {
+      this.hexRegions.delete(hex);
+      if (region.hexes.size === 0) {
+        this.deleteRegion(region);
+      }
+    }
+  }
+
+  hexHasRegion(hex: Hex) {
+    return this.hexRegions.has(hex);
+  }
+
+  getHexRegion(hex: Hex): Region | null {
+    return this.hexRegions.get(hex) ?? null;
+  }
+}
 
 
 export class WorldRenderer {
@@ -32,8 +151,12 @@ export class WorldRenderer {
   chunkDrawTimes: Map<string, number>;
   chunksLayer: PIXI.Container;
   overlayLayer: PIXI.ParticleContainer;
+  gridLayer: PIXI.ParticleContainer;
+  regionLayer: PIXI.ParticleContainer;
   hexOverlaySprites: Map<Hex, PIXI.Sprite>;
   cull: cull.Simple;
+
+  regionMap: RegionMap;
 
   constructor(
     private app: PIXI.Application,
@@ -58,6 +181,10 @@ export class WorldRenderer {
 
     this.hexOverlaySprites = new Map();
     this.overlayLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+    this.gridLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+    this.regionLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+
+    this.regionMap = new RegionMap(this.world);
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x += 2) {
@@ -92,6 +219,8 @@ export class WorldRenderer {
         this.debugGraphics.visible = !this.debugGraphics.visible;
       } else if (event.key === 'o') {
         this.overlayLayer.visible = !this.overlayLayer.visible;
+      } else if (event.key === 'g') {
+        this.gridLayer.visible = !this.gridLayer.visible;
       }
     });
   }
@@ -165,6 +294,26 @@ export class WorldRenderer {
       overlaySprite.height = this.assets.hexTemplate.size.height;
       this.overlayLayer.addChild(overlaySprite);
       this.hexOverlaySprites.set(hex, overlaySprite);
+
+      const gridSprite = new PIXI.Sprite(this.assets.gridTexture);
+      gridSprite.alpha = 0.25;
+      gridSprite.position.set(x, y);
+      gridSprite.width = this.assets.hexTemplate.size.width;
+      gridSprite.height = this.assets.hexTemplate.size.height;
+      this.gridLayer.addChild(gridSprite);
+
+      if (this.regionMap.hexHasRegion(hex)) {
+        const region = this.regionMap.getHexRegion(hex);
+        const tileIDMap = this.regionMap.borderTilesetID.get(hex);
+        for (const [dir, tileID] of tileIDMap) {
+          const borderSprite = new PIXI.Sprite(this.assets.borderTileset.getTile(tileID));
+          borderSprite.tint = region.color.toNumber();
+          borderSprite.position.set(x, y);
+          borderSprite.width = this.assets.hexTemplate.size.width;
+          borderSprite.height = this.assets.hexTemplate.size.height;
+          this.regionLayer.addChild(borderSprite);
+        }
+      }
     });
     this.chunkDirty.set(chunkKey, false);
 
@@ -235,11 +384,11 @@ export class WorldRenderer {
       //   this.debugGraphics.endFill();
       // }
 
-      // draw grid lines
-      this.debugGraphics.lineStyle(1, 0xFFFFFF);
-      this.debugGraphics.moveTo(firstCorner.x, firstCorner.y)
-      otherCorners.forEach(({ x, y }) => this.debugGraphics.lineTo(x, y))
-      this.debugGraphics.lineTo(firstCorner.x, firstCorner.y)
+      // // draw grid lines
+      // this.debugGraphics.lineStyle(1, 0xFFFFFF);
+      // this.debugGraphics.moveTo(firstCorner.x, firstCorner.y)
+      // otherCorners.forEach(({ x, y }) => this.debugGraphics.lineTo(x, y))
+      // this.debugGraphics.lineTo(firstCorner.x, firstCorner.y)
 
       // rivers
       if (this.world.hexRiverEdges.containsKey(hex)) {
