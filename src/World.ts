@@ -347,3 +347,17 @@ export class World {
     }
   }
 }
+
+export function calculateCentroidForHexes(world: World, hexes: Hex[]): Coord {
+  let x = 0;
+  let y = 0;
+  for (const hex of hexes) {
+    const [nx, ny] = world.getHexPosition(hex.x, hex.y);
+    x += nx + 32;
+    y += ny + 30;
+  }
+  return [
+    x / hexes.length,
+    y / hexes.length,
+  ];
+}

@@ -1,7 +1,7 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord, ColorArray, Direction, adjacentDirections } from './types';
-import { Hex, World } from './World';
+import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord, ColorArray, Direction, adjacentDirections, CoordArray } from './types';
+import { Hex, World, calculateCentroidForHexes } from './World';
 import { terrainColors, terrainTransitions, TerrainType } from './terrain';
 import { HexTile, OFFSET_Y, tileSectionRenderOrder } from './hexTile';
 import { Assets } from './AssetLoader';
@@ -10,7 +10,7 @@ import SimplexNoise from 'simplex-noise';
 import { Viewport } from 'pixi-viewport';
 import { chunk } from 'lodash';
 import { rgbaToInt } from 'jimp/*';
-import { colorToNumber } from './utils';
+import { colorToNumber, floodFill } from './utils';
 import { Color } from './utils/Color';
 import { Subject } from 'rxjs';
 import { Grid2D } from './utils/Grid2D';
@@ -57,18 +57,20 @@ class Region {
     this.map.removeHexRegion(hex, this);
   }
 
-  get labelPosition(): Coord {
-    let x = 0;
-    let y = 0;
+  calculateLabels() {
+    const visited = new Set<Hex>();
+    const labels: CoordArray = [];
     for (const hex of this.hexes) {
-      const [nx, ny] = this.map.world.getHexPosition(hex.x, hex.y);
-      x += nx + 32;
-      y += ny + 30;
+      if (!visited.has(hex)) {
+        const part = this.map.world.floodFill(
+          hex,
+          (hex, neighbor) => this.map.getHexRegion(neighbor) == this,
+          visited,
+        );
+        labels.push(calculateCentroidForHexes(this.map.world, Array.from(part)));
+      }
     }
-    return [
-      x / this.hexes.size,
-      y / this.hexes.size,
-    ]
+    return labels;
   }
 
   update() {
@@ -219,7 +221,7 @@ export class WorldRenderer {
   hexBorderSprites: Map<Hex, Map<Direction, PIXI.Sprite>>;
   cull: cull.Simple;
   labelContainer: PIXI.Container;
-  regionLabels: Map<Region, MapLabel>;
+  regionLabels: Map<Region, MapLabel[]>;
 
   regionMap: RegionMap;
 
@@ -293,20 +295,21 @@ export class WorldRenderer {
       }
     });
 
-    const addRegionLabel = (region: Region) => {
-      if (this.regionLabels.has(region)) return;
-      const [x, y] = region.labelPosition;
-      const label = new MapLabel(region.name, 16)
-      label.position.set(x, y);
-      this.regionLabels.set(region, label);
-      this.labelContainer.addChild(label);
-    }
-  
     const updateRegionLabel = (region: Region) => {
-      const [x, y] = region.labelPosition;
+      const labelPositions = region.calculateLabels();
+      console.log('labels', region, labelPositions);
       if (this.regionLabels.has(region)) {
-        this.regionLabels.get(region).position.set(x, y);
+        const labels = this.regionLabels.get(region);
+        for (const label of labels) {
+          this.labelContainer.removeChild(label);
+        }
       }
+      this.regionLabels.set(region, labelPositions.map(([x, y]) => {
+        const label = new MapLabel(region.name, 16)
+        label.position.set(x, y);
+        this.labelContainer.addChild(label);
+        return label;
+      }));
     }
 
     const updateRegionMap = (region: Region) => {
@@ -321,19 +324,21 @@ export class WorldRenderer {
     }
   
     const removeRegionLabel = (region: Region) => {
-      const label = this.regionLabels.get(region)
+      const labels = this.regionLabels.get(region)
       this.regionLabels.delete(region);
-      this.labelContainer.removeChild(label);
+      for (const label of labels) {
+        this.labelContainer.removeChild(label);
+      }
     }
 
     this.regionMap.regions.added$.subscribe(region => {
       region.update();
-      addRegionLabel(region);
+      updateRegionLabel(region);
     });
     this.regionMap.regionHexAdded$.subscribe(([region]) => {
       console.log('region hex added', region);
       region.update();
-      addRegionLabel(region);
+      updateRegionLabel(region);
       updateRegionLabel(region);
       updateRegionMap(region);
     });
