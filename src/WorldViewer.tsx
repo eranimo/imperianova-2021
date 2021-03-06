@@ -49,6 +49,7 @@ class WorldManager {
   init(world: World, assets: Assets) {
     // render
     const renderer = new WorldRenderer(this.app, world, assets);
+    renderer.setIcon(world.getHex(5, 5), 'castle');
     this.viewport.removeChildren();
     this.viewport.worldWidth = renderer.worldWidth;
     this.viewport.worldHeight = renderer.worldHeight;
@@ -56,6 +57,7 @@ class WorldManager {
     this.viewport.addChild(renderer.overlayLayer);
     this.viewport.addChild(renderer.gridLayer);
     this.viewport.addChild(renderer.regionLayer);
+    this.viewport.addChild(renderer.iconsLayer);
     this.viewport.addChild(renderer.debugGraphics);
     this.viewport.addChild(renderer.labelContainer);
 

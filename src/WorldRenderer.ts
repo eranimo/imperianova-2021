@@ -177,6 +177,36 @@ class RegionMap {
   }
 }
 
+class MapIcon extends PIXI.Container{
+  sprite: PIXI.Sprite;
+
+  constructor(filename: string) {
+    super();
+
+    // const t = PIXI.Texture.WHITE;
+    // const s = new PIXI.Sprite(t);
+    // s.width = 64;
+    // s.height = 60;
+    // s.anchor.set(0.5);
+    // this.addChild(s);
+
+    import(
+      /* webpackMode: "lazy-once" */
+      `./assets/icons/${filename}.svg`
+    ).then((src) => {
+      PIXI.Texture.fromURL(src.default).then(texture => {
+        const sprite = new PIXI.Sprite(texture);
+        this.sprite = sprite;
+        sprite.width = 48;
+        sprite.height = 48;
+        sprite.tint = 0xC0C0C0;
+        sprite.anchor.set(0.5);
+        this.addChild(sprite);
+      });
+    });
+  }
+}
+
 
 class MapLabel extends PIXI.Container {
   labelText: PIXI.Text;
@@ -198,7 +228,6 @@ class MapLabel extends PIXI.Container {
   }
 }
 
-
 export class WorldRenderer {
   public world: World;
   public debugGraphics: PIXI.Graphics;
@@ -213,17 +242,24 @@ export class WorldRenderer {
   chunkHexes: Map<string, { x: number, y: number }[]>;
   chunkDrawTimes: Map<string, number>;
   chunksLayer: PIXI.Container;
+
   overlayLayer: PIXI.ParticleContainer;
   gridLayer: PIXI.ParticleContainer;
   regionLayer: PIXI.ParticleContainer;
+
   hexOverlaySprites: Map<Hex, PIXI.Sprite>;
   hexGridSprites: Map<Hex, PIXI.Sprite>;
   hexBorderSprites: Map<Hex, Map<Direction, PIXI.Sprite>>;
+
   cull: cull.Simple;
+
   labelContainer: PIXI.Container;
   regionLabels: Map<Region, MapLabel[]>;
-
   regionMap: RegionMap;
+
+  hexMapIcons: Map<Hex, string>;
+  hexMapIconsSprites: Map<Hex, MapIcon>;
+  iconsLayer: PIXI.Container;
 
   constructor(
     private app: PIXI.Application,
@@ -283,6 +319,9 @@ export class WorldRenderer {
 
     this.onNewWorld(world);
     this.cull.addList(this.chunksLayer.children);
+    this.iconsLayer = new PIXI.Container();
+    this.hexMapIcons = new Map();
+    this.hexMapIconsSprites = new Map();
 
     // setup events
     document.addEventListener('keyup', event => {
@@ -297,7 +336,6 @@ export class WorldRenderer {
 
     const updateRegionLabel = (region: Region) => {
       const labelPositions = region.calculateLabels();
-      console.log('labels', region, labelPositions);
       if (this.regionLabels.has(region)) {
         const labels = this.regionLabels.get(region);
         for (const label of labels) {
@@ -339,7 +377,6 @@ export class WorldRenderer {
       console.log('region hex added', region);
       region.update();
       updateRegionLabel(region);
-      updateRegionLabel(region);
       updateRegionMap(region);
     });
     this.regionMap.regionHexRemoved$.subscribe(([region, hex]) => {
@@ -351,6 +388,10 @@ export class WorldRenderer {
       this.drawChunk(chunk);
     });
     this.regionMap.regions.deleted$.subscribe(region => removeRegionLabel(region));
+  }
+
+  setIcon(hex: Hex, icon: string) {
+    this.hexMapIcons.set(hex, icon);
   }
 
   onViewportMoved(viewport: Viewport) {
@@ -414,6 +455,8 @@ export class WorldRenderer {
         }
       }
 
+      const hexSize = this.assets.hexTemplate.size;
+
       // overlay
       if (!this.hexOverlaySprites.has(hex)) {
         const overlaySprite = new PIXI.Sprite(this.assets.hexTemplate.fullHex);
@@ -469,6 +512,20 @@ export class WorldRenderer {
           }
         }
         this.hexBorderSprites.set(hex, hexBorderSprites);
+      }
+
+      // icons
+      if (this.hexMapIcons.has(hex)) {
+        const iconName = this.hexMapIcons.get(hex);
+        const mapIcon = new MapIcon(iconName);
+        mapIcon.width = hexSize.width;
+        mapIcon.height = hexSize.height;
+        mapIcon.position.set(
+          x + (hexSize.width / 2),
+          y + (hexSize.height / 2),
+        );
+        this.hexMapIconsSprites.set(hex, mapIcon);
+        this.iconsLayer.addChild(mapIcon);
       }
     });
     this.chunkDirty.set(chunkKey, false);
