@@ -1,9 +1,7 @@
 export const theme = {
-  global: {
-    font: {
-      family: 'Roboto',
-      size: '14px',
-      height: '20px',
-    },
+  colors: {
+    light: '#e5f2ff',
+    primary: '#1e90ff',
+    overlay: 'rgba(36, 42, 48, 0.9)',
   },
 };

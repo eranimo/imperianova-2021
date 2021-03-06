@@ -6,6 +6,7 @@ import { WorldGrid } from '../game/world/WorldGrid';
 import { times } from 'lodash';
 import { AssetLoader } from '../WorldViewer/AssetLoader';
 import { WorldViewer } from '../WorldViewer/WorldViewer';
+import { GameHeader } from './GameHeader';
 
 enum WorldSize {
   SMALL = 75,
@@ -39,33 +40,37 @@ const worldGen = new WorldGenerator();
 export const GameView = () => {
   const [worldRef, setWorld] = useState<World>();
 
+  const onNewWorld = (world: World) => {
+    console.log('world', world);
+    const worldGrid = new WorldGrid(world);
+    worldGrid.buildGrid();
+
+    // test data
+    console.time('setup test data');
+    testRoads(world, worldGrid);
+    console.timeEnd('setup test data');
+
+    setWorld(world);
+    console.log('done loading');
+  };
+
+  const regenerate = () => {
+    const world = worldGen.generate({
+      ...options,
+      seed: Math.random(),
+    });
+    onNewWorld(world);
+  };
+
   useEffect(() => {
-    const onNewWorld = (world: World) => {
-      console.log('world', world);
-      const worldGrid = new WorldGrid(world);
-      worldGrid.buildGrid();
-
-      // test data
-      console.time('setup test data');
-      testRoads(world, worldGrid);
-      console.timeEnd('setup test data');
-
-      setWorld(world);
-      console.log('done loading');
-    };
     onNewWorld(worldGen.generate(options));
-
-    (window as any).regenerate = () => {
-      const world = worldGen.generate({
-        ...options,
-        seed: Math.random(),
-      });
-      onNewWorld(world);
-    }
   }, []);
 
   return (
     <AssetLoader>
+      <GameHeader
+        regenerate={regenerate}
+      />
       <WorldViewer world={worldRef} />
     </AssetLoader>
   );
