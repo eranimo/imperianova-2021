@@ -59,7 +59,7 @@ class WorldManager {
     this.viewport.addChild(renderer.debugGraphics);
     this.viewport.addChild(renderer.labelContainer);
 
-    renderer.regionMap.createRegion({
+    const testRegion = renderer.regionMap.createRegion({
       name: 'One',
       hexes: [
         world.getHex(5, 5),
@@ -76,7 +76,6 @@ class WorldManager {
       ],
       color: Color.fromHSL(random(0, 360), .70, .50),
     });
-    renderer.regionMap.update();
 
 
     this.viewport$.subscribe(viewport => renderer.onViewportMoved(viewport));
@@ -105,6 +104,12 @@ class WorldManager {
       const tileSections = assets.hexSectionTileset.getHexTileSections(world, hex);
       console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
       console.log('regions', renderer.regionMap.borderTilesetID.get(hex));
+
+      if (renderer.regionMap.getHexRegion(hex) == testRegion) {
+        testRegion.remove(hex);
+      } else {
+        testRegion.add(hex);
+      }
     });
 
     (window as any).moveToHex = (x: number, y: number) => {
