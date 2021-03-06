@@ -1,7 +1,7 @@
 import { Hex, World } from './World';
 import createGraph, { Graph } from 'ngraph.graph';
 import path, { PathFinder } from 'ngraph.path';
-import { Direction, directionIndexOrder } from './types';
+import { Direction, directionIndexOrder } from '../../types';
 
 type HexLink = {
   direction: Direction,

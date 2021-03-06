@@ -1,11 +1,11 @@
 import { Viewport } from 'pixi-viewport';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { BehaviorSubject } from 'rxjs';
-import { GridFactory, World } from './World';
+import { GridFactory, World } from '../game/world/World';
 import { WorldMinimap } from './WorldMinimap';
 import { WorldRenderer } from './WorldRenderer';
 import { AssetContext, Assets } from './AssetLoader';
-import { Color } from './utils/Color';
+import { Color } from '../utils/Color';
 import { random } from 'lodash';
 
 class WorldManager {

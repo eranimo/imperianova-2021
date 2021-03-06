@@ -3,13 +3,13 @@
 import Jimp from "jimp";
 import path from 'path';
 import fs from 'fs';
-import { TerrainType, terrainTransitions, terrainTypeTitles, TerrainTypeMap } from '../src/terrain';
+import { TerrainType, terrainTransitions, terrainTypeTitles, TerrainTypeMap } from '../src/game/world/terrain';
 import { Direction, Corner, ColorArray, Coord, Rect, DirectionMap, CoordArray, Size } from '../src/types';
 import { newImage } from "./imageUtils";
 import { performance } from 'perf_hooks';
 import { TileGen, TileQuery } from './TileGen';
 import { terrainTypePrimaryColors, controlPoints, tileColorTransition } from './settings';
-import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition, sectionTypeEdges, centerTypeEdges } from '../src/hexTile';
+import { TileSectionType, HexTileSectionVariant, TileSectionEdge, HexTileSection, TileSectionEdgeMap, SectionControlPoint, TileSectionTypeMap, getSectionTileID, TilesetDefinition, sectionTypeEdges, centerTypeEdges } from '../src/game/world/hexTile';
 import cliProgress from 'cli-progress';
 import { midpoint, rotatePoint, getNeighbors, midpointPoints, randomizePoint, randomizeColor, randomizeColorBrightness, getPositionAlongTheLine } from '../src/utils';
 import { randomizedPattern, noisyPattern, wavyPattern } from './patternGenerator';

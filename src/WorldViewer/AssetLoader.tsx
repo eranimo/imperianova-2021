@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useState } from "react"
 import { HexSectionTileset } from "./HexSectionTileset";
-import tilesetJson from './assets/tileset.json';
+import tilesetJson from '../assets/tileset.json';
 import { HexTemplate } from './HexTemplate';
 import { Tileset } from './Tileset';
 
@@ -27,11 +27,11 @@ export const AssetLoader = ({
   const [assets, setAssets] = useState(null);
   useEffect(() => {
     const loader = new PIXI.Loader();
-    loader.add('hexTemplate', require('./assets/hex-template.png'))
-    loader.add('autogenObjectsPNG', require('./assets/autogen-objects.png'))
-    loader.add('tilesetPNG', require('./assets/tileset.png'))
-    loader.add('gridTexture', require('./assets/grid.png'))
-    loader.add('borderTileset', require('./assets/borders.png'))
+    loader.add('hexTemplate', require('../assets/hex-template.png'))
+    loader.add('autogenObjectsPNG', require('../assets/autogen-objects.png'))
+    loader.add('tilesetPNG', require('../assets/tileset.png'))
+    loader.add('gridTexture', require('../assets/grid.png'))
+    loader.add('borderTileset', require('../assets/borders.png'))
     loader.add('tilesetJSON', tilesetJson)
     loader.load(({ resources }) => {
       const assets: Assets = {

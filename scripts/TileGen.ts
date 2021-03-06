@@ -4,7 +4,7 @@ import ndarray from 'ndarray';
 import { colorToNumber, getPositionAlongTheLine, midpoint, roundPoint, bresenhamLinePlot, floodFill } from '../src/utils';
 import { isArray } from 'lodash';
 import { boolean } from 'yargs';
-import { TerrainType } from '../src/terrain';
+import { TerrainType } from '../src/game/world/terrain';
 import { PatternGenerator } from './patternGenerator';
 
 

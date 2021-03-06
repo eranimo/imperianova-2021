@@ -1,6 +1,6 @@
-import { TerrainType } from '../src/terrain';
+import { TerrainType } from '../src/game/world/terrain';
 import { ColorArray, Coord } from '../src/types';
-import { TileSectionType, SectionControlPoint, TileSectionTypeMap } from '../src/hexTile';
+import { TileSectionType, SectionControlPoint, TileSectionTypeMap } from '../src/game/world/hexTile';
 import { hexToRgb } from '../src/utils';
 
 

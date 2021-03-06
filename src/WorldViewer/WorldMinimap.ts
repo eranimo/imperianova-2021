@@ -1,9 +1,9 @@
-import { World, Hex } from './World';
-import { ColorArray, Size, Coord, CornerMap } from './types';
+import { World, Hex } from '../game/world/World';
+import { ColorArray, Size, Coord, CornerMap } from '../types';
 import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
-import { terrainColors } from './terrain';
+import { terrainColors } from '../game/world/terrain';
 import { Assets } from './AssetLoader';
 
 

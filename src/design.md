@@ -1,11 +1,21 @@
 # Design
 
-main thread:
 - World: logical representation of a World
 - WorldGenerator: Generates world data for World
 - WorldViewer: PixiJS Application.
 - WorldRenderer
 
+### Folder structure
+- assets/ (images and data files)
+- utils/ (common utility classes)
+- game/ (game files)
+  - world/ (world and world generator)
+  - simulation/ (ECS)
+    - entities/ 
+    - components/
+    - systems/
+- pages/ (core game ui)
+- WorldViewer/ (world map renderer)
 
 ## World Generator
 ### Biomes and terrain types

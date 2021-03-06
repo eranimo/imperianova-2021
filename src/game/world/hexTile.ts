@@ -1,4 +1,4 @@
-import { CornerMap, DirectionMap, Direction, Corner, ColorArray, Size } from './types';
+import { CornerMap, DirectionMap, Direction, Corner, ColorArray, Size } from '../../types';
 import { TerrainType } from './terrain';
 import { isUndefined } from 'lodash';
 

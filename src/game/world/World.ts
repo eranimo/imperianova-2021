@@ -1,4 +1,4 @@
-import { Size, Direction, oddq_directions, oppositeDirections, directionIndexOrder, adjacentDirections, DirectionMap, directionTitles, Coord } from './types';
+import { Size, Direction, oddq_directions, oppositeDirections, directionIndexOrder, adjacentDirections, DirectionMap, directionTitles, Coord } from '../../types';
 import ndarray from 'ndarray';
 import * as Honeycomb from 'honeycomb-grid';
 import { clamp } from 'lodash';

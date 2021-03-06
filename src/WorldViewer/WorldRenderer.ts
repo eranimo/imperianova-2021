@@ -1,20 +1,20 @@
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import * as PIXI from 'pixi.js';
-import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord, ColorArray, Direction, adjacentDirections, CoordArray } from './types';
-import { Hex, World, calculateCentroidForHexes } from './World';
-import { terrainColors, terrainTransitions, TerrainType } from './terrain';
-import { HexTile, OFFSET_Y, tileSectionRenderOrder } from './hexTile';
+import { cornerDirections, cornerIndexOrder, CornerMap, directionCorners, directionIndexOrder, DirectionMap, Coord, ColorArray, Direction, adjacentDirections, CoordArray } from '../types';
+import { Hex, World, calculateCentroidForHexes } from '../game/world/World';
+import { terrainColors, terrainTransitions, TerrainType } from '../game/world/terrain';
+import { HexTile, OFFSET_Y, tileSectionRenderOrder } from '../game/world/hexTile';
 import { Assets } from './AssetLoader';
 import cull from 'pixi-cull';
 import SimplexNoise from 'simplex-noise';
 import { Viewport } from 'pixi-viewport';
 import { chunk } from 'lodash';
 import { rgbaToInt } from 'jimp/*';
-import { colorToNumber, floodFill } from './utils';
-import { Color } from './utils/Color';
+import { colorToNumber, floodFill } from '../utils';
+import { Color } from '../utils/Color';
 import { Subject } from 'rxjs';
-import { Grid2D } from './utils/Grid2D';
-import { ObservableSet } from './utils/ObservableSet';
+import { Grid2D } from '../utils/Grid2D';
+import { ObservableSet } from '../utils/ObservableSet';
 import { map, mapTo, mergeAll, mergeMap } from 'rxjs/operators';
 
 const CHUNK_WIDTH = 10;
@@ -192,7 +192,7 @@ class MapIcon extends PIXI.Container{
 
     import(
       /* webpackMode: "lazy-once" */
-      `./assets/icons/${filename}.svg`
+      `../assets/icons/${filename}.svg`
     ).then((src) => {
       PIXI.Texture.fromURL(src.default).then(texture => {
         const sprite = new PIXI.Sprite(texture);

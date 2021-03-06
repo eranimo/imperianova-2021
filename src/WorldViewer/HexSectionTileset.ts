@@ -1,8 +1,8 @@
-import { TilesetDefinition, HexTileSection, HexTileSectionVariant, TilesetDefinitionTile, getSectionTileID, TileSectionTypeMap, TileSectionEdgeMap, TileSectionType, centerTypeEdges, sectionTypeToDirection, edgeSectionTypes, centerEdgeToDirection, TileSectionEdge, tileSectionRenderOrder, tileSectionTypeTitles, tileSectionEdgeTitles } from './hexTile';
-import { MultiMap } from './utils/MultiMap';
-import { Hex, World } from './World';
-import { DirectionMap, directionIndexOrder, adjacentDirections } from './types';
-import { terrainTransitions, TerrainType, terrainTypeTitles } from './terrain';
+import { TilesetDefinition, HexTileSection, HexTileSectionVariant, TilesetDefinitionTile, getSectionTileID, TileSectionTypeMap, TileSectionEdgeMap, TileSectionType, centerTypeEdges, sectionTypeToDirection, edgeSectionTypes, centerEdgeToDirection, TileSectionEdge, tileSectionRenderOrder, tileSectionTypeTitles, tileSectionEdgeTitles } from '../game/world/hexTile';
+import { MultiMap } from '../utils/MultiMap';
+import { Hex, World } from '../game/world/World';
+import { DirectionMap, directionIndexOrder, adjacentDirections } from '../types';
+import { terrainTransitions, TerrainType, terrainTypeTitles } from '../game/world/terrain';
 
 
 export class HexSectionTileset {

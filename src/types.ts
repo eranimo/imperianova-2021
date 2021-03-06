@@ -1,4 +1,4 @@
-import { TerrainType } from './terrain';
+import { TerrainType } from './game/world/terrain';
 
 export type Size = {
   width: number;
