@@ -1,32 +1,8 @@
+import { Box, Flex, IconButton, Tooltip, Wrap } from '@chakra-ui/react';
+import styled from '@emotion/styled';
 import React from 'react';
-import styled from 'styled-components';
 import { BiRefresh } from 'react-icons/bi';
 
-
-const Container = styled.div`
-  position: fixed;
-  top: 0;
-  padding: 0.5rem;
-  background-color: ${props => props.theme.colors.overlay};
-  z-index: 100;
-  width: 100%;
-`;
-
-const Header = styled.div`
-  display: flex;
-`;
-
-const HeaderButton = styled.button`
-  background: none;
-  border: none;
-  color: inherit;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-`;
-HeaderButton.defaultProps = {
-  type: 'button',
-};
 
 export const GameHeader = ({
   regenerate,
@@ -34,13 +10,26 @@ export const GameHeader = ({
   regenerate: () => void,
 }) => {
   return (
-    <Container>
-      <Header>
-        <HeaderButton onClick={regenerate}>
-          Refresh
-          <BiRefresh size="1.2rem" />
-        </HeaderButton>
-      </Header>
-    </Container>
+    <Flex
+      bgColor="gray.900"
+      width="full"
+      p={2}
+      position="fixed"
+      top={0}
+      zIndex={100}
+    >
+      <Wrap w={2}>
+        <Tooltip
+          label="Reload map"
+        >
+          <IconButton
+            onClick={regenerate}
+            size="sm"
+            aria-label="refresh"
+            icon={<BiRefresh size="1.2rem" />}
+          />
+        </Tooltip>
+      </Wrap>
+    </Flex>
   )
 }
