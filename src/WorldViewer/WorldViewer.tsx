@@ -3,10 +3,11 @@ import React, { useContext, useEffect, useRef, useState } from 'react';
 import { BehaviorSubject } from 'rxjs';
 import { GridFactory, World } from '../game/world/World';
 import { WorldMinimap } from './WorldMinimap';
-import { WorldRenderer } from './WorldRenderer';
+import { WorldMap } from './WorldMap';
 import { AssetContext, Assets } from './AssetLoader';
 import { Color } from '../utils/Color';
 import { random } from 'lodash';
+import { Direction } from '../types';
 
 class WorldManager {
   viewport$: BehaviorSubject<Viewport>;
@@ -48,7 +49,7 @@ class WorldManager {
 
   init(world: World, assets: Assets) {
     // render
-    const renderer = new WorldRenderer(this.app, world, assets);
+    const renderer = new WorldMap(this.app, world, assets);
     renderer.setIcon(world.getHex(5, 5), 'castle');
     this.viewport.removeChildren();
     this.viewport.worldWidth = renderer.worldWidth;
@@ -107,10 +108,13 @@ class WorldManager {
       console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
       console.log('regions', renderer.regionMap.borderTilesetID.get(hex));
 
-      if (renderer.regionMap.getHexRegion(hex) == testRegion) {
-        testRegion.remove(hex);
-      } else {
-        testRegion.add(hex);
+      if (hex) {
+        // if (renderer.regionMap.getHexRegion(hex) == testRegion) {
+        //   testRegion.remove(hex);
+        // } else {
+        //   testRegion.add(hex);
+        // }
+        world.setHexRoad(hex, world.getHexNeighbor(hex.x, hex.y, Direction.N), Direction.N);
       }
     });
 
