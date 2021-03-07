@@ -1,14 +1,10 @@
 import Alea from 'alea';
-import * as Honeycomb from 'honeycomb-grid';
-import { orderBy } from 'lodash';
+import ndarray from 'ndarray';
 import SimplexNoise from 'simplex-noise';
-import { MultiDictionary } from 'typescript-collections';
-import { adjacentDirections, Direction, directionIndexOrder, DirectionMap, oppositeDirections, Size } from '../../types';
+import { Size } from '../../types';
 import { logGroupTime, octaveNoise3D } from '../../utils';
 import { TerrainType } from './terrain';
-import { Edge, Hex, World } from './World';
-import ndarray from 'ndarray';
-import { parseToHsl } from 'polished';
+import { Edge, World } from './World';
 
 
 export type WorldGeneratorOptions = {

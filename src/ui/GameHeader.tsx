@@ -1,5 +1,4 @@
-import { Box, Flex, IconButton, Tooltip, Wrap } from '@chakra-ui/react';
-import styled from '@emotion/styled';
+import { Flex, IconButton, Tooltip, Wrap } from '@chakra-ui/react';
 import React from 'react';
 import { BiRefresh } from 'react-icons/bi';
 
