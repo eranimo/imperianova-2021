@@ -2,7 +2,14 @@ import { BehaviorSubject } from 'rxjs';
 import { Entity, Component } from './EntityManager';
 
 
-export class Value<T> extends BehaviorSubject<T> {
+export interface IField<T> {
+  export(): {
+    __type: string,
+    value: T
+  }
+}
+
+export class Value<T> extends BehaviorSubject<T> implements IField<T> {
 
   constructor(value: T) {
     super(value);
@@ -24,7 +31,7 @@ export class Value<T> extends BehaviorSubject<T> {
   }
 }
 
-export class EntityRef extends BehaviorSubject<Entity> {
+export class EntityRef extends BehaviorSubject<Entity> implements IField<string> {
   public id: string;
 
   constructor(entity: Entity) {

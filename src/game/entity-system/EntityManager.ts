@@ -4,7 +4,7 @@ import { MultiMap } from '../../utils/MultiMap';
 import { MapSet } from '../../utils/MapSet';
 import { get, isFunction, set } from 'lodash';
 import { number } from 'yargs';
-import { EntityRef, EntityObject, Value } from './fields';
+import { EntityRef, EntityObject, Value, IField } from './fields';
 import { Signal } from 'typed-signals';
 
 /**
@@ -32,7 +32,7 @@ export type ComponentUpdate<K = any, V = any> = {
   value?: V;
 }
 
-export type FieldTypes = string | number | boolean | null | EntityRef | EntityObject;
+export type FieldTypes = string | number | boolean | null | IField<unknown> | { [key: string]: IField<unknown> };
 
 type ComponentType = {
   [field: string]: FieldTypes,
