@@ -15,6 +15,13 @@ export class Value<T> extends BehaviorSubject<T> {
   valueOf() {
     return this.value;
   }
+
+  export() {
+    return {
+      __type: 'Value',
+      value: this.value,
+    };
+  }
 }
 
 export class EntityRef extends BehaviorSubject<Entity> {
@@ -40,6 +47,13 @@ export class EntityRef extends BehaviorSubject<Entity> {
 
   valueOf() {
     return this.id;
+  }
+
+  export() {
+    return {
+      __type: 'EntityRef',
+      value: this.id,
+    };
   }
 }
 

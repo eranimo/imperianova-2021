@@ -2,9 +2,9 @@ import uuid from 'uuid-random';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { MultiMap } from '../../utils/MultiMap';
 import { MapSet } from '../../utils/MapSet';
-import { get, set } from 'lodash';
+import { get, isFunction, set } from 'lodash';
 import { number } from 'yargs';
-import { EntityRef, EntityObject } from './fields';
+import { EntityRef, EntityObject, Value } from './fields';
 import { Signal } from 'typed-signals';
 
 /**
@@ -128,25 +128,29 @@ export class Entity {
 
 export type ComponentExport = {
   id: string;
+  type: string;
+  entityID: string;
   values: {
     [key: string]: any,
   }
 }
 
-export type EntityExport = {
-  id: string;
+export type ExportData = {
+  ticks: number,
   components: {
-    [type: string]: ComponentExport
-  }
+    [type: string]: ComponentExport[],
+  },
 }
 
 export class EntityManager {
   private components: Map<Component<any>, ComponentValue<any>[]> = new Map();
+  private componentTypeMap: Map<string, Component<any>> = new Map();
   private entities: Entity[] = [];
   private currentIndex = 0;
   private systems: System[] = [];
   private systemLastTick: Map<System, number> = new Map();
   private queries: Set<Query> = new Set();
+  private entityById: Map<string, Entity> = new Map();
   public ticks: number = 0;
 
   stats: BehaviorSubject<{
@@ -158,12 +162,84 @@ export class EntityManager {
     this.stats = new BehaviorSubject(this.getStats());
   }
 
-  import() {
-
+  /**
+   * Removes all components and entities, resets tick counter
+   */
+  reset() {
+    for (const comp of this.componentTypeMap.values()) {
+      this.components.set(comp, []);
+    }
+    this.entities = [];
+    this.currentIndex = 0;
+    this.entityById = new Map();
+    this.ticks = 0;
+    this.systemLastTick = new Map();
+    this.updateStats();
   }
 
-  export() {
+  import(data: ExportData) {
+    this.ticks = data.ticks;
+    this.reset();
+    // restore all entities
+    const entities: Map<string, Entity> = new Map();
+    for (const [type, components] of Object.entries(data.components)) {
+      for (const component of components) {
+        entities.set(component.entityID, this.createEntity(component.entityID));
+      }
+    }
+    for (const [type, components] of Object.entries(data.components)) {
+      if (!this.componentTypeMap.has(type)) {
+        throw Error(`Could not find component with type "${type}"`)
+      }
+      const component = this.componentTypeMap.get(type);
+      this.components.set(component, components.map(compExport => {
+        const data = {};
+        for (const [key, value] of Object.entries(compExport.values)) {
+          if (value && value.__type) {
+            if (value.__type === 'Value') {
+              data[key] = new Value<any>(value);
+            } else if (value.__type === 'EntityRef') {
+              if (entities.has(value)) {
+                throw Error(`Could not find entity with ID "${value}"`);
+              }
+              const entity = entities.get(value);
+              data[key] = new EntityRef(entity);
+            }
+          } else {
+            data[key] = value;
+          }
+        }
+        return new ComponentValue(data, component);
+      }));
+    }
+    this.updateStats();
+  }
 
+  export(): ExportData {
+    let data: ExportData = {
+      ticks: this.ticks,
+      components: {},
+    };
+    for (const [component, values] of this.components) {
+      data.components[component.type] = [];
+      for (const componentValue of values) {
+        const componentData = {};
+        for (const [key, value] of Object.entries(componentValue.value)) {
+          if (value && isFunction((value as any).export)) {
+            componentData[key] = (value as any).export();
+          } else {
+            componentData[key] = value;
+          }
+        }
+        data.components[component.type].push({
+          id: componentValue.id,
+          entityID: componentValue.entity.id,
+          type: component.type,
+          values: componentData,
+        })
+      }
+    }
+    return data;
   }
 
   createEntity(id?: string): Entity {
@@ -176,10 +252,20 @@ export class EntityManager {
     this.components.forEach((componentValues) => {
       componentValues[entity.index] = undefined;
     });
+    this.entityById.set(entity.id, entity);
     return entity;
   }
 
+  hasEntity(id: string) {
+    return this.entityById.has(id);
+  }
+
+  getEntity(id: string) {
+    return this.entityById.get(id);
+  }
+
   registerComponent<T>(component: Component<T>) {
+    this.componentTypeMap.set(component.type, component);
     if (this.components.has(component)) {
       return;
     }
@@ -188,6 +274,7 @@ export class EntityManager {
   }
 
   unregisterComponent<T>(component: Component<T>) {
+    this.componentTypeMap.delete(component.type);
     this.components.delete(component);
   }
 
@@ -258,6 +345,7 @@ export class EntityManager {
         return;
       }
       entity.added = false;
+      this.entityById.delete(entity.id);
       if (entity.removed) {
         this.components.forEach((componentValues) => {
           componentValues[entity.index] = undefined;
@@ -274,8 +362,12 @@ export class EntityManager {
     return stats;
   }
 
-  update() {
+  private updateStats() {
     this.stats.next(this.getStats());
+  }
+
+  update() {
+    this.updateStats();
     this.maintain();
     this.ticks++;
     for (const system of this.systems) {

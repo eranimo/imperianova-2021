@@ -72,6 +72,45 @@ describe('Entity', () => {
     expect(pos.changed.has('x')).toBe(false);
   });
 
+  it('export, reset, and import', () => {
+
+    // export
+    const Position = new Component<Coordinate>('Position')
+    const entity = manager.createEntity();
+    manager.registerComponent(Position);
+    const pos = entity.addComponent(Position, ({ x: 1, y: 1 }));
+    expect(pos.entity.id).toBe(entity.id);
+
+    const exported = manager.export();
+    expect(exported).toEqual({
+      ticks: 0,
+      components: {
+        Position: [
+          {
+            id: pos.id,
+            entityID: entity.id,
+            type: 'Position',
+            values: {
+              x: 1,
+              y: 1,
+            },
+          }
+        ]
+      }
+    });
+
+    manager.reset();
+    expect(manager.stats.value.entityCount).toBe(0);
+
+    manager.import(exported);
+    expect(manager.stats.value.entityCount).toBe(1);
+    expect(manager.hasEntity(entity.id)).toBe(true);
+    const e = manager.getEntity(entity.id);
+    expect(e.getComponent(Position).value).toEqual({
+      x: 1,
+      y: 1,
+    });
+  });
 
   describe('references', () => {
     let Body: Component<{
