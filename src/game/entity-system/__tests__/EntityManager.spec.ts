@@ -174,6 +174,84 @@ describe('Entity', () => {
         },
       });
     });
+
+    it('export and import works with EntityRef and EntityMap', () => {
+      const bodyEntity = manager.createEntity('body');
+      const headEntity = manager.createEntity('head');
+      const thumbEntity = manager.createEntity('thumb');
+      const pinkyEntity = manager.createEntity('pinky');
+      const head = headEntity.addComponent(Head, { size: 'small' });
+      const thumb = thumbEntity.addComponent(Finger, { isBroken: false });
+      const pinky = pinkyEntity.addComponent(Finger, { isBroken: false });
+      const body = bodyEntity.addComponent(Body, {
+        race: 'human',
+        head: headEntity.createRef(),
+        fingers: {
+          thumb: thumbEntity.createRef(),
+          pinky: pinkyEntity.createRef(),
+        },
+      });
+      const exported = manager.export();
+      expect(exported.components.Body).toHaveLength(1);
+      expect(exported.components.Head).toHaveLength(1);
+      expect(exported.components.Finger).toHaveLength(2);
+      expect(exported.components).toEqual({
+        Head: [
+          {
+            id: head.id,
+            type: 'Head',
+            entityID: headEntity.id,
+            values: {
+              size: 'small',
+            }
+          }
+        ],
+        Body: [
+          {
+            id: body.id,
+            type: 'Body',
+            entityID: bodyEntity.id,
+            values: {
+              race: 'human',
+              head: {
+                __type: 'EntityRef',
+                value: headEntity.id,
+              },
+              fingers: {
+                thumb: {
+                  __type: 'EntityRef',
+                  value: thumbEntity.id,
+                },
+                pinky: {
+                  __type: 'EntityRef',
+                  value: pinkyEntity.id,
+                },
+              }
+            }
+          }
+        ],
+        Finger: [
+          {
+            id: thumb.id,
+            type: 'Finger',
+            entityID: thumbEntity.id,
+            values: {
+              isBroken: false,
+            },
+          },
+          {
+            id: pinky.id,
+            type: 'Finger',
+            entityID: pinkyEntity.id,
+            values: {
+              isBroken: false,
+            },
+          }
+        ]
+      })
+      manager.import(exported);
+      expect(manager.getEntity(bodyEntity.id).getComponent(Body).value.race).toBe('human');
+    });
   });
 });
 

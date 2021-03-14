@@ -197,12 +197,12 @@ export class EntityManager {
         for (const [key, value] of Object.entries(compExport.values)) {
           if (value && value.__type) {
             if (value.__type === 'Value') {
-              data[key] = new Value<any>(value);
+              data[key] = new Value<any>(value.value);
             } else if (value.__type === 'EntityRef') {
-              if (entities.has(value)) {
-                throw Error(`Could not find entity with ID "${value}"`);
+              if (!entities.has(value.value)) {
+                throw Error(`Could not find entity with ID "${value.value}"`);
               }
-              const entity = entities.get(value);
+              const entity = entities.get(value.value);
               data[key] = new EntityRef(entity);
             }
           } else {
@@ -224,19 +224,27 @@ export class EntityManager {
       data.components[component.type] = [];
       for (const componentValue of values) {
         const componentData = {};
-        for (const [key, value] of Object.entries(componentValue.value)) {
-          if (value && isFunction((value as any).export)) {
-            componentData[key] = (value as any).export();
-          } else {
-            componentData[key] = value;
+        if (componentValue !== undefined) {
+          for (const [key, value] of Object.entries(componentValue.value)) {
+            if (value && isFunction((value as any).export)) {
+              componentData[key] = (value as any).export();
+            } else if (typeof value === 'object') {
+              const d = {};
+              for (const [k, v] of Object.entries(value)) {
+                d[k] = v.export();
+              }
+              componentData[key] = d;
+            } else {
+              componentData[key] = value;
+            }
           }
+          data.components[component.type].push({
+            id: componentValue.id,
+            entityID: componentValue.entity.id,
+            type: component.type,
+            values: componentData,
+          })
         }
-        data.components[component.type].push({
-          id: componentValue.id,
-          entityID: componentValue.entity.id,
-          type: component.type,
-          values: componentData,
-        })
       }
     }
     return data;
