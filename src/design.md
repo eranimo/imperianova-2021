@@ -60,3 +60,50 @@ __Rivers__
 
 __Roads__
 - bridges
+
+
+## Game
+
+### Simulation
+__Entities__
+Entities are pieces of data with an ID that can be observed, serialized, and referenced to by other entities.
+
+
+- Meta
+  - handles date
+- World
+  - logical representation of the game world
+  - produced by WorldGenerator
+- Player
+  - information about the current player
+  - reference to their Polity
+- Polity
+  - primary unit of the game. Conceptually represents a state, tribe, or chiefdom
+  - contain many Tiles
+  - exists on the Map
+- Tile
+  - a hexagon cell in the world
+  - exists on the Map
+  - contains information related to roads, rivers, terrain type
+- Building
+  - exist on Tiles
+- Resource
+  - represent natural resources that can be exploited by polities
+  - exist on Tiles
+- Pop
+  - represents
+  - exist on Tiles
+- Unit
+  - exists on the Map
+
+__Systems__
+Systems are functions that operate on one or more entities that perform a specific function.
+
+- MovementSystem
+  - moves units on the map
+- PolitySystem
+  - 
+
+__Context__
+- WorldMap: renders the world map
+- WorldGrid: pathfinding

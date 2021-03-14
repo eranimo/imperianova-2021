@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Alea from 'alea';
 import { World } from '../game/world/World';
 import { WorldGeneratorOptions, WorldGenerator } from '../game/world/WorldGenerator';
@@ -7,6 +7,7 @@ import { times } from 'lodash';
 import { AssetLoader } from '../WorldViewer/AssetLoader';
 import { WorldViewer } from '../WorldViewer/WorldViewer';
 import { GameHeader } from './GameHeader';
+import { Game } from '../game/simulation/Game';
 
 enum WorldSize {
   SMALL = 75,
@@ -28,7 +29,7 @@ function testRoads(world: World, worldGrid: WorldGrid) {
       times(Math.round(rng() * 10)).forEach(() => {
         const to = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
         const path = worldGrid.findPath(from, to);
-        world.setRoadPath(path);
+        worldGrid.addRoadPath(path);
       });
     }
   }
@@ -38,19 +39,21 @@ function testRoads(world: World, worldGrid: WorldGrid) {
 const worldGen = new WorldGenerator();
 
 export const GameView = () => {
+  const [gameRef, setGame] = useState<Game>();
   const [worldRef, setWorld] = useState<World>();
 
   const onNewWorld = (world: World) => {
     console.log('world', world);
-    const worldGrid = new WorldGrid(world);
-    worldGrid.buildGrid();
+    setWorld(world);
+    const game = new Game(world);
+    console.log('game', game);
+    setGame(game);
 
     // test data
     console.time('setup test data');
-    testRoads(world, worldGrid);
+    testRoads(world, game.context.worldGrid);
     console.timeEnd('setup test data');
 
-    setWorld(world);
     console.log('done loading');
   };
 
@@ -63,14 +66,16 @@ export const GameView = () => {
   };
 
   useEffect(() => {
-    onNewWorld(worldGen.generate(options));
+    const world = worldGen.generate(options);
+    onNewWorld(world);
   }, []);
 
   return (
     <AssetLoader>
-      <GameHeader
+      {gameRef && <GameHeader
+        game={gameRef}
         regenerate={regenerate}
-      />
+      />}
       <WorldViewer world={worldRef} />
     </AssetLoader>
   );

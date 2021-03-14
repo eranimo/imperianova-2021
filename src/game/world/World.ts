@@ -66,7 +66,7 @@ export class World {
   hexEdges: Edge[];
   hexEdgeIDs: Map<number, Edge>;
 
-  private worldData: WorldData;
+  public worldData: WorldData;
 
   constructor() {
     this.indexMap = new Map();
@@ -79,6 +79,7 @@ export class World {
     world.setWorldSize(worldData.options.size);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap);
     world.setWorldRivers(worldData.rivers);
+    return world;
   }
 
   setWorldData(worldData: WorldData) {
