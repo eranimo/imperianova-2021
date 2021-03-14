@@ -54,6 +54,13 @@ export class ComponentValue<T extends ComponentType> {
     this.value = value;
     this.component = component;
 
+    this.value = new Proxy(this.value, {
+      set: (target, key, value) => {
+        this.changed.add(key as keyof T);
+        target[key as keyof T] = value;
+        return true;
+      },
+    });
   }
 
   set<K extends keyof T>(key: K, value: T[K]) {
@@ -313,7 +320,7 @@ export class EntityManager {
     // notify queries
     for (const query of this.queries) {
       if (query.entityFunc(entity)) {
-        query.entities.add(entity);
+        query._addEntity(entity)
       }
     }
   }
@@ -335,7 +342,7 @@ export class EntityManager {
     componentValues[entity.index] = undefined;
     for (const query of this.queries) {
       if (query.entities.has(entity) && !query.entityFunc(entity)) {
-        query.entities.delete(entity);
+        query._removeEntity(entity);
       }
     }
     return prevValue;
@@ -403,6 +410,9 @@ export class Query {
   private systems: Set<System> = new Set();
   entities: Set<Entity> = new Set();
 
+  onEntityAdded: Signal<(entity: Entity) => void> = new Signal();
+  onEntityRemoved: Signal<(entity: Entity) => void> = new Signal();
+
   constructor(
     private manager: EntityManager,
     public entityFunc: (entity: Entity) => boolean,
@@ -410,8 +420,20 @@ export class Query {
     manager._registerQuery(this);
   }
 
+  _addEntity(entity: Entity) {
+    this.entities.add(entity);
+    this.onEntityAdded.emit(entity);
+  }
+
+  _removeEntity(entity: Entity) {
+    this.entities.delete(entity);
+    this.onEntityRemoved.emit(entity);
+  }
+
   destroy() {
     this.manager._unregisterQuery(this);
+    this.onEntityAdded.disconnectAll();
+    this.onEntityRemoved.disconnectAll();
   }
 
   attach(system: System) {
