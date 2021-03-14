@@ -55,7 +55,8 @@ describe('Entity', () => {
 
     const pos = entity.getComponent(Test);
     expect(pos.id).toBeDefined();
-    expect(pos.get('num')).toBe(1);
+    expect(pos.value.num).toBe(1);
+    pos.value.num++;
     entity.getComponent(Test).set('num', 2);
     expect(pos.get('num')).toBe(2);
   });
@@ -66,7 +67,7 @@ describe('Entity', () => {
     manager.registerComponent(Position);
     const pos = entity.addComponent(Position, ({ x: 2, y: 1 }));
     expect(pos.changed.has('x')).toBe(false);
-    pos.set('x', 2);
+    pos.value.x++;
     expect(pos.changed.has('x')).toBe(true);
     manager.update();
     expect(pos.changed.has('x')).toBe(false);
@@ -283,6 +284,8 @@ describe('System', () => {
   });
 
   it('query', () => {
+    let added = jest.fn();
+    let removed = jest.fn();
     class MovementSystem extends System {
       query: Query;
 
@@ -290,6 +293,12 @@ describe('System', () => {
         this.query = manager.createQuery(entity => 
           entity.hasComponent(Position) && entity.hasComponent(Velocity)
         );
+        this.query.onEntityAdded.connect(() => {
+          added();
+        });
+        this.query.onEntityRemoved.connect(() => {
+          removed();
+        });
       }
 
       update() {
@@ -307,9 +316,45 @@ describe('System', () => {
     const entity = manager.createEntity();
     const pos = entity.addComponent(Position, { x: 0, y: 0 });
     entity.addComponent(Velocity, { x: 1, y: 1 });
+    expect(added.mock.calls.length).toBe(1);
 
     times(10, () => manager.update());
     expect(pos.value.x).toBe(10);
     expect(pos.value.y).toBe(10);
+
+    entity.removeComponent(Velocity);
+
+    expect(removed.mock.calls.length).toBe(1);
+  });
+
+  it('entity updates', () => {
+    const hasChanged = jest.fn();
+    class BasicSystem extends System {
+      query: Query;
+
+      init(manager: EntityManager) {
+        this.query = manager.createQuery(entity => 
+          entity.hasComponent(Position)
+        );
+      }
+
+      update() {
+        for (const entity of this.query.entities) {
+          const pos = entity.getComponent(Position);
+          if (pos.changed.has('x') || pos.changed.has('y')) {
+            hasChanged();
+          }
+        }
+      }
+    }
+    manager.registerSystem(new BasicSystem());
+
+    const entity = manager.createEntity();
+    const pos = entity.addComponent(Position, { x: 0, y: 0 });
+
+    pos.value.x++;
+    manager.update();
+    manager.update();
+    expect(hasChanged.mock.calls.length).toBe(1);
   });
 });
