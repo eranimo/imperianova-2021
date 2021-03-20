@@ -45,7 +45,7 @@ export const GameView = () => {
   const onNewWorld = (world: World) => {
     console.log('world', world);
     setWorld(world);
-    const game = new Game(world);
+    const game = Game.create(world);
     console.log('game', game);
     setGame(game);
 

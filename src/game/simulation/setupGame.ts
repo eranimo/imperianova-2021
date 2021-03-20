@@ -3,11 +3,12 @@ import { World, Hex } from '../world/World';
 import Alea from 'alea';
 import { createTile, createPop } from './entities';
 import { PopDataComponent, WorldTileDataComponent } from './components';
+import { Random } from '../../utils/Random';
 
 export function setupGame(
   game: Game,
 ) {
-  const rng = Alea(123); // TODO: game seed option
+  const random = new Random('123'); // TODO: game seed option
   /**
    * create initial pops
    */
@@ -15,7 +16,7 @@ export function setupGame(
   for (const landmass of game.world.landmasses) {
     if (landmass.size > 1) {
       for (let i = 0; i < 10; i++) {
-        const randomHex = landmass.hexes[Math.round(rng() * (landmass.hexes.length - 1))];
+        const randomHex = landmass.hexes[random.randomInt(landmass.hexes.length - 1)];
         initialPopHexes.add(randomHex);
       }
     }
@@ -24,8 +25,8 @@ export function setupGame(
   for (const hex of initialPopHexes) {
     const tileEntity = createTile(game.entityManager, { coord: hex });
     const popEntity = createPop(game.entityManager, {
-      size: 0,
-      growth: 0,
+      size: random.randomInt(500),
+      growth: 1,
     });
     tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
   }

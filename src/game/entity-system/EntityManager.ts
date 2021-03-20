@@ -397,6 +397,8 @@ export class EntityManager {
       this.systemLastTick.set(system, this.ticks);
       system.update(deltaTime);
     }
+
+    console.log(this.export());
   }
 }
 

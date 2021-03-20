@@ -8,6 +8,7 @@ import { WorldGrid } from '../world/WorldGrid';
 import { EntityManager, Entity, ExportData } from '../entity-system/EntityManager';
 import { GameInfoComponent, components } from './components';
 import { createGameInfo } from './entities';
+import { setupGame } from './setupGame';
 
 
 export type GameData = {
@@ -56,7 +57,13 @@ export class Game {
     this.entityManager = entityManager;
   }
 
-  static fromData(data: GameData) {
+  static create(world: World) {
+    const game = new Game(world);
+    setupGame(game);
+    return game;
+  }
+
+  static load(data: GameData) {
     const world = World.fromData(data.world);
     const game = new Game(world);
     game.entityManager.import(data.entityData);
