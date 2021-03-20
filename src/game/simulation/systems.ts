@@ -1,54 +1,23 @@
-import { Query, System } from "ape-ecs";
+import { System } from '../entity-system';
+import { Query, EntityManager } from '../entity-system/EntityManager';
 import { Game } from './Game';
-import { Road } from './components';
+import { PopDataComponent } from './components';
 
+export class PopSystem extends System {
+  query: Query;
 
-export class ChangesSystem extends System {
-  watchedEntityID: Set<string>;
-  game: Game;
-
-  init(game: Game) {
-    this.game = game;
-    this.watchedEntityID = new Set();
-    game.watchedEntities$.added$.subscribe(entity => {
-      this.watchedEntityID.add(entity.id);
-      for (const componentType of Object.keys(entity.types)) {
-        this.subscribe(componentType);
-      }
-    });
-    game.watchedEntities$.deleted$.subscribe(entity => {
-      this.watchedEntityID.delete(entity.id);
-    });
+  init(manager: EntityManager) {
+    this.query = manager.createQuery(entity => entity.hasComponent(PopDataComponent));
   }
 
   update() {
-    for (const change of this.changes) {
-      if (this.watchedEntityID.has(change.entity)) {
-        this.game.entityUpdates$.next(this.world.getEntity(change.entity));
-      }
+    for (const entity of this.query.entities) {
+      const popData = entity.getComponent(PopDataComponent);
+      popData.value.size += popData.value.growth;
     }
   }
 }
 
-export class RoadSystem extends System {
-  game: Game;
-  roads: Query;
-
-  init(game: Game) {
-    this.game = game;
-    this.subscribe(Road);
-  }
-
-  update() {
-    for (const change of this.changes) {
-      const entity = this.game.ecs.getEntity(change.entity);
-      if (change.type === 'add') {
-        
-      } else if (change.type === 'update') {
-
-      } else if (change.type === 'destroy') {
-        
-      }
-    }
-  }
+export function registerSystems(manager: EntityManager) {
+  manager.registerSystem(new PopSystem());
 }

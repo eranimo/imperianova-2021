@@ -64,19 +64,45 @@ __Roads__
 
 ## Game
 
-### Simulation
+AI algorithms:
+- [ ] Decision trees and state machines for simple AI
+  https://github.com/oguzeroglu/Ego
+- [ ] Hierarchical task network for complex action planning
+- [ ] Utility AI for goal selection
+  https://bitbucket.org/dananau/pyhop/src/master/
+  https://www.gameaipro.com/GameAIPro/GameAIPro_Chapter12_Exploring_HTN_Planners_through_Example.pdf
+- [ ] A* for pathfinding
+- [ ] quad-tree for spacial indexing
+
+Architecture:
+- [x] ECS
+- [ ] DataType (json-based type classes)
+
+### Simulation 1.0
+- Pops represent a single segment of the population living in one area. Its size represents the number of families of that type.
+- Pops exist on Tiles.
+- Pops have a size. They grow by 0.005% per month
+- Pops have Actions.
+  - An operation has an optional input resource(s), output resource(s), and a cycle. Output is proportional to size of Pops.
+  - List of actions:
+    - Foraging: gathers Food Resources from current Tile
+- Pops independently decide what action to take based on their current state
+
+### Game init
+- Generate 10 random Polities at 10 random land hexes
+- Generate Tile for each hex
+- Generate 1 Pop for reach Tile
+
+
+### Architecture
 __Entities__
 Entities are pieces of data with an ID that can be observed, serialized, and referenced to by other entities.
-
 
 - Meta
   - handles date
 - World
   - logical representation of the game world
   - produced by WorldGenerator
-- Player
-  - information about the current player
-  - reference to their Polity
 - Polity
   - primary unit of the game. Conceptually represents a state, tribe, or chiefdom
   - contain many Tiles
@@ -96,13 +122,23 @@ Entities are pieces of data with an ID that can be observed, serialized, and ref
 - Unit
   - exists on the Map
 
+__Components__
+- Position (world coordinate)
+- HexPosition (hex grid coordinate)
+- TileData
+- PolityData
+- WorldData
+- MetaData
+- UnitData
+- UnitUI
+- ResourceData
+
 __Systems__
 Systems are functions that operate on one or more entities that perform a specific function.
 
 - MovementSystem
   - moves units on the map
 - PolitySystem
-  - 
 
 __Context__
 - WorldMap: renders the world map

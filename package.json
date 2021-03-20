@@ -54,6 +54,8 @@
     "jimp": "^0.16.1",
     "localforage": "^1.9.0",
     "lodash": "^4.17.20",
+    "mobx": "^6.1.8",
+    "mobx-react-lite": "^3.2.0",
     "ndarray": "^1.0.19",
     "ngraph.graph": "^19.1.0",
     "ngraph.path": "^1.3.1",

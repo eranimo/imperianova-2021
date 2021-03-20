@@ -1,17 +1,18 @@
-import { Entity, IEntityObject, World as ECS } from 'ape-ecs';
 import Deltaframe from "deltaframe";
 import { BehaviorSubject, Subject } from 'rxjs';
 import { ObservableSet } from '../../utils/ObservableSet';
 import { World } from '../world/World';
 import { WorldData } from '../world/WorldGenerator';
-import { Date, FrameInfo } from './components';
-import { ChangesSystem } from './systems';
+import { registerSystems } from './systems';
 import { WorldGrid } from '../world/WorldGrid';
+import { EntityManager, Entity, ExportData } from '../entity-system/EntityManager';
+import { GameInfoComponent, components } from './components';
+import { createGameInfo } from './entities';
 
 
 export type GameData = {
   world: WorldData,
-  entities: IEntityObject[],
+  entityData: ExportData,
 }
 
 export type Context = {
@@ -21,8 +22,8 @@ export type Context = {
 
 export class Game {
   deltaframe: Deltaframe;
-  ecs: ECS;
-  gameinfo: Entity;
+  entityManager: EntityManager;
+  gameInfo: Entity;
   isPlaying$: BehaviorSubject<boolean>;
 
   watchedEntities$: ObservableSet<Entity>;
@@ -38,36 +39,34 @@ export class Game {
     this.watchedEntities$ = new ObservableSet();
     this.entityUpdates$ = new Subject();
     this.isPlaying$ = new BehaviorSubject(false);
-    this.ecs = new ECS();
+    const entityManager = new EntityManager();
 
     this.context = {
       world,
       worldGrid: new WorldGrid(world),
     };
     
-    this.ecs.registerComponent(FrameInfo);
-    this.ecs.registerComponent(Date);
-    this.ecs.registerSystem('EveryFrame', ChangesSystem, [this]);
-    this.gameinfo = this.ecs.createEntity({
-      id: 'GameInfo',
-      c: {
-        frame: { type: 'FrameInfo' },
-        date: { type: 'Date', dateTicks: currentDate }
-      }
-    });
+    for (const comp of components) {
+      entityManager.registerComponent<any>(comp);
+    }
+    registerSystems(entityManager);
+    this.gameInfo = createGameInfo(entityManager, {
+      date: currentDate,
+    })
+    this.entityManager = entityManager;
   }
 
   static fromData(data: GameData) {
     const world = World.fromData(data.world);
     const game = new Game(world);
-    game.ecs.createEntities(data.entities);
+    game.entityManager.import(data.entityData);
     return Game;
   }
 
   export(): GameData {
     return {
       world: this.world.worldData,
-      entities: this.ecs.getObject()
+      entityData: this.entityManager.export(),
     };
   }
 
@@ -93,15 +92,8 @@ export class Game {
 
   update(time: number, deltaTime: number) {
     // console.log('day', this.gameinfo.c.date.dateTicks);
-    this.gameinfo.c.frame.update({
-      time,
-      deltaTime,
-    });
-    this.gameinfo.c.date.update({
-      dateTicks: this.gameinfo.c.date.dateTicks + 1,
-    });
-    this.ecs.runSystems('EveryFrame');
-    this.ecs.tick();
+    this.gameInfo.getComponent(GameInfoComponent).value.date += 1;
+    this.entityManager.update();
   }
 
   play() {

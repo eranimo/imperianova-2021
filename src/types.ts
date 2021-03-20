@@ -20,7 +20,10 @@ export type CoordArray = Coord[];
 export type Range = [low: number, high: number];
 export type ColorArray = [r: number, g: number, b: number];
 export type AlphaColorArray = [r: number, g: number, b: number, a: number];
-
+export type Coordinate = {
+  x: number,
+  y: number,
+};
 export enum Direction {
   SE = 0,
   NE = 1,

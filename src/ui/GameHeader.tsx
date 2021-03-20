@@ -5,36 +5,19 @@ import React, { useEffect, useState } from 'react';
 import { BiPause, BiPlay, BiRefresh } from 'react-icons/bi';
 import { useObservable } from 'react-use';
 import { Game } from '../game/simulation/Game';
+import { observer } from 'mobx-react-lite';
+import { GameInfoComponent } from '../game/simulation/components';
 
-
-function useEntityChanges(
-  game: Game,
-  entity: Entity,
-  getter: (entity: Entity) => any
-) {
-  const [data, setData] = useState(getter(entity));
-
-  useEffect(() => {
-    const [subject, unsubscribe] = game.watchEntityChanges(entity)
-    subject.subscribe(changedEntity => {
-      setData(getter(changedEntity));
-    })
-    return () => unsubscribe();
-  }, []);
-
-  return data;
-}
-
-const EntityValue = ({
-  game, entity, getter,
-}: {
-  game: Game,
-  entity: Entity,
-  getter: (entity: Entity) => any
-}) => {
-  const value = useEntityChanges(game, entity, getter);
-  return value;
-}
+const DateDisplay = observer<{
+  game: Game
+}>(({ game }) => {
+  const [date] = useState(() => game.gameInfo.getComponent(GameInfoComponent).value);
+  return (
+    <>
+      {date.date}
+    </>
+  );
+});
 
 export const GameHeader = ({
   regenerate,
@@ -68,7 +51,7 @@ export const GameHeader = ({
             icon={<BiPlay size="1.2rem" />}
           />
         }
-        <EntityValue game={game} entity={game.gameinfo} getter={e => e.c.date.dateTicks} />
+        <DateDisplay game={game} />
         <Tooltip
           label="Reload map"
         >
