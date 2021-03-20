@@ -3,9 +3,10 @@ import { Subject, BehaviorSubject } from 'rxjs';
 import { MultiMap } from '../../utils/MultiMap';
 import { MapSet } from '../../utils/MapSet';
 import { get, isFunction, set } from 'lodash';
-import { number } from 'yargs';
+import { number, strict } from 'yargs';
 import { EntityRef, EntityObject, Value, IField } from './fields';
 import { Signal } from 'typed-signals';
+import { autorun, configure, makeAutoObservable, makeObservable, observable, runInAction } from 'mobx';
 
 /**
  * Type class for a component
@@ -32,7 +33,14 @@ export type ComponentUpdate<K = any, V = any> = {
   value?: V;
 }
 
-export type FieldTypes = string | number | boolean | null | IField<unknown> | { [key: string]: IField<unknown> };
+export type FieldTypes = 
+  string |
+  number |
+  boolean |
+  null |
+  object |
+  IField<unknown> |
+  { [key: string]: IField<unknown> };
 
 type ComponentType = {
   [field: string]: FieldTypes,
@@ -47,29 +55,19 @@ export class ComponentValue<T extends ComponentType> {
   component: Component<T>;
   added: boolean = false;
   entity: Entity | null = null;
-  changed: Set<keyof T> = new Set();
 
   constructor(value: T, component: Component<T>) {
     this.id = uuid();
     this.value = value;
     this.component = component;
 
-    this.value = new Proxy(this.value, {
-      set: (target, key, value) => {
-        this.changed.add(key as keyof T);
-        target[key as keyof T] = value;
-        return true;
-      },
+    this.value = observable(this.value, {
+      deep: true,
     });
   }
 
-  set<K extends keyof T>(key: K, value: T[K]) {
-    this.changed.add(key);
-    this.value[key] = value;
-  }
-
-  get<K extends keyof T>(key: K) {
-    return get(this.value, key);
+  action(func: () => void) {
+    runInAction(func);
   }
 
   attach(entity: Entity) {
@@ -167,6 +165,10 @@ export class EntityManager {
   constructor(startTicks: number = 0) {
     this.ticks = startTicks;
     this.stats = new BehaviorSubject(this.getStats());
+
+    configure({
+      enforceActions: 'never',
+    });
   }
 
   /**
@@ -381,7 +383,7 @@ export class EntityManager {
     this.stats.next(this.getStats());
   }
 
-  update() {
+  update(deltaTime: number = 1) {
     this.updateStats();
     this.maintain();
     this.ticks++;
@@ -393,15 +395,7 @@ export class EntityManager {
         }
       }
       this.systemLastTick.set(system, this.ticks);
-      system.update();
-    }
-
-    for (const [comp, compValues] of this.components) {
-      for (const compValue of compValues) {
-        if (compValue) {
-          compValue.changed.clear();
-        }
-      }
+      system.update(deltaTime);
     }
   }
 }
@@ -436,6 +430,23 @@ export class Query {
     this.onEntityRemoved.disconnectAll();
   }
 
+  effect(
+    func: (entity: Entity) => () => void | void,
+  ) {
+    let disposeMap: Map<Entity, Function> = new Map();
+
+    this.onEntityAdded.connect(entity => {
+      const disposer = func(entity);
+      disposeMap.set(entity, disposer);
+    });
+
+    this.onEntityRemoved.connect(entity => {
+      if (disposeMap.has(entity)) {
+        disposeMap.get(entity)();
+      }
+    });
+  }
+
   attach(system: System) {
     this.systems.add(system);
   }
@@ -449,7 +460,7 @@ export class System {
   init(manager: EntityManager) {
   }
 
-  update() {
+  update(deltaTime: number) {
     throw new Error('Must implement in subclass');
   }
 }

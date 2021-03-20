@@ -67,3 +67,40 @@ export class EntityRef extends BehaviorSubject<Entity> implements IField<string>
 export type EntityObject = {
   [key: string]: EntityRef,
 };
+
+export class EntitySet implements IField<string[]> {
+  data: Set<Entity>;
+
+  constructor(entities: Entity[] = []) {
+    this.data = new Set(entities);
+  }
+
+  add(entity: Entity) {
+    return this.data.add(entity);
+  }
+
+  has(entity: Entity) {
+    return this.data.has(entity);
+  }
+
+  delete(entity: Entity) {
+    return this.data.delete(entity);
+  }
+
+  get size() {
+    return this.data.size;
+  }
+
+  *[Symbol.iterator]() {
+    for (const entity of this.data) {
+      yield entity;
+    }
+  }
+
+  export() {
+    return {
+      __type: 'EntitySet',
+      value: Array.from(this.data.values()).map(i => i.id),
+    };
+  }
+}

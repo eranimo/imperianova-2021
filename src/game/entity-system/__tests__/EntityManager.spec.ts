@@ -1,7 +1,8 @@
 import { times } from 'lodash';
+import { reaction } from 'mobx';
 import { Coord } from 'src/types';
 import { EntityManager, Component, System, Query, Entity } from '../EntityManager';
-import { EntityRef } from '../fields';
+import { EntityRef, EntitySet } from '../fields';
 
 test('setup', () => {
   const manager = new EntityManager();
@@ -12,6 +13,15 @@ type Coordinate = {
   x: number,
   y: number,
 };
+
+type DeepType = {
+  num: 1,
+  foo: {
+    bar: {
+      baz: number,
+    }
+  }
+}
 
 describe('Entity', () => {
   let manager: EntityManager;
@@ -57,20 +67,39 @@ describe('Entity', () => {
     expect(pos.id).toBeDefined();
     expect(pos.value.num).toBe(1);
     pos.value.num++;
-    entity.getComponent(Test).set('num', 2);
-    expect(pos.get('num')).toBe(2);
+    entity.getComponent(Test).value.num = 2;
+    expect(pos.value.num).toBe(2);
   });
 
   it('changes', () => {
-    const Position = new Component<Coordinate>('Position')
+    const Deep = new Component<DeepType>('Deep')
     const entity = manager.createEntity();
-    manager.registerComponent(Position);
-    const pos = entity.addComponent(Position, ({ x: 2, y: 1 }));
-    expect(pos.changed.has('x')).toBe(false);
-    pos.value.x++;
-    expect(pos.changed.has('x')).toBe(true);
+    manager.registerComponent(Deep);
+    const pos = entity.addComponent(Deep, ({
+      num: 1,
+      foo: {
+        bar: {
+          baz: 1,
+        }
+      }
+    }));
+    
+    let didReact = false;
+    reaction(
+      () => pos.value.num,
+      () => didReact = true
+    );
+    pos.value.num = 2;
     manager.update();
-    expect(pos.changed.has('x')).toBe(false);
+    expect(didReact).toBe(true);
+
+    didReact = false;
+    reaction(
+      () => pos.value.foo.bar.baz,
+      () => didReact = true
+    );
+    pos.value.foo.bar.baz = 2;
+    expect(didReact).toBe(true);
   });
 
   it('export, reset, and import', () => {
@@ -147,18 +176,42 @@ describe('Entity', () => {
         head: headEntity.createRef(),
       });
 
-      expect(body.get('race')).toBe('human');
-      expect(body.get('head')).toBeInstanceOf(EntityRef);
-      expect(body.get('head').valueOf()).toBe(headEntity.id);
-      expect(body.get('head').value).toBeInstanceOf(Entity);
+      expect(body.value.race).toBe('human');
+      expect(body.value.head).toBeInstanceOf(EntityRef);
+      expect(body.value.head.valueOf()).toBe(headEntity.id);
+      expect(body.value.head.value).toBeInstanceOf(Entity);
 
       // deleting referenced Entity sets property to null
       headEntity.remove();
       manager.update();
-      expect(body.get('head').value).toBe(null);
+      expect(body.value.head.value).toBe(null);
     });
 
-    it('creating and removing EntityMap', () => {
+    it('creating and removing EntitySet', () => {
+      const Foo = new Component<{
+        bars: EntitySet,
+      }>('Foo');
+      const Bar = new Component<{
+        size: number,
+      }>('Foo');
+      manager.registerComponent(Foo);
+      manager.registerComponent(Bar);
+      const fooEntity = manager.createEntity('foo');
+      const barEntity1 = manager.createEntity('bar1');
+      barEntity1.addComponent(Bar, { size: 0 });
+      const barEntity2 = manager.createEntity('bar2');
+      barEntity2.addComponent(Bar, { size: 1 }),
+      fooEntity.addComponent(Foo, {
+        bars: new EntitySet([
+          barEntity1,
+          barEntity2,
+        ])
+      });
+
+      expect(fooEntity.getComponent(Foo).value.bars.size).toBe(2);
+    })
+
+    it('creating and removing EntityObject', () => {
       const bodyEntity = manager.createEntity('body');
       const headEntity = manager.createEntity('head');
       const thumbEntity = manager.createEntity('thumb');
@@ -305,8 +358,8 @@ describe('System', () => {
         for (const entity of this.query.entities) {
           const pos = entity.getComponent(Position);
           const vel = entity.getComponent(Velocity);
-          pos.set('x', pos.get('x') + vel.get('x'));
-          pos.set('y', pos.get('y') + vel.get('y'));
+          pos.value.x += vel.value.x;
+          pos.value.y += vel.value.y;
         }
       }
     }
@@ -328,23 +381,35 @@ describe('System', () => {
   });
 
   it('entity updates', () => {
+    const hasReaction = jest.fn();
     const hasChanged = jest.fn();
     class BasicSystem extends System {
       query: Query;
+
+      changedEntities: Set<Entity> = new Set();
 
       init(manager: EntityManager) {
         this.query = manager.createQuery(entity => 
           entity.hasComponent(Position)
         );
+
+        this.query.effect(entity => {
+          const pos = entity.getComponent(Position);
+          return reaction(
+            () => pos.value.x,
+            (v) => {
+              hasReaction(v);
+              this.changedEntities.add(entity);
+            }
+          )
+        });
       }
 
       update() {
-        for (const entity of this.query.entities) {
-          const pos = entity.getComponent(Position);
-          if (pos.changed.has('x') || pos.changed.has('y')) {
-            hasChanged();
-          }
+        for (const entity of this.changedEntities) {
+          hasChanged();
         }
+        this.changedEntities.clear();
       }
     }
     manager.registerSystem(new BasicSystem());
@@ -355,6 +420,8 @@ describe('System', () => {
     pos.value.x++;
     manager.update();
     manager.update();
+    expect(hasReaction.mock.calls.length).toBe(1);
+    expect(hasReaction.mock.calls[0][0]).toBe(1);
     expect(hasChanged.mock.calls.length).toBe(1);
   });
 });
