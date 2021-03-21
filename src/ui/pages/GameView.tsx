@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import Alea from 'alea';
 import { World } from '../../game/world/World';
 import { WorldGeneratorOptions, WorldGenerator } from '../../game/world/WorldGenerator';
@@ -40,6 +40,7 @@ function testRoads(world: World, worldGrid: WorldGrid) {
   console.groupEnd();
 }
 
+export const GameContext = React.createContext<Game>(null);
 
 export const GameView = ({ location }) => {
   const [gameRef, setGame] = useState<Game>();
@@ -68,10 +69,10 @@ export const GameView = ({ location }) => {
 
   return (
     <AssetLoader>
-      {gameRef && <GameHeader
-        game={gameRef}
-      />}
-      {gameRef && <WorldViewer world={gameRef.world} />}
+      {gameRef && <GameContext.Provider value={gameRef}>
+        <GameHeader />
+        <WorldViewer />
+      </GameContext.Provider>}
     </AssetLoader>
   );
 }

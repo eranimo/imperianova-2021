@@ -8,8 +8,10 @@ import { AssetContext, Assets } from './AssetLoader';
 import { Color } from '../utils/Color';
 import { random } from 'lodash';
 import { Direction } from '../types';
+import { Game } from '../game/simulation/Game';
+import { GameContext } from '../ui/pages/GameView';
 
-class WorldManager {
+class WorldMapManager {
   viewport$: BehaviorSubject<Viewport>;
   app: PIXI.Application;
   viewport: Viewport;
@@ -51,9 +53,10 @@ class WorldManager {
     this.app.destroy();
   }
 
-  init(world: World, assets: Assets) {
+  init(game: Game, assets: Assets) {
+    const world = game.world;
     // render
-    const renderer = new WorldMap(this.app, world, assets);
+    const renderer = new WorldMap(this.app, game, assets);
     renderer.setIcon(world.getHex(5, 5), 'castle');
     this.viewport.removeChildren();
     this.viewport.worldWidth = renderer.worldWidth;
@@ -130,29 +133,26 @@ class WorldManager {
   }
 }
 
-export const WorldViewer = ({
-  world,
-}: {
-  world: World,
-}) => {
+export const WorldViewer = () => {
+  const game = useContext(GameContext);
   const worldMapRef = useRef<HTMLCanvasElement>();
   const minimapRef = useRef<HTMLCanvasElement>();
   const [isLoading, setLoading] = useState(true);
   const { isLoading: isAssetsLoading, assets } = useContext(AssetContext);
 
-  const manager = useRef<WorldManager>();
+  const manager = useRef<WorldMapManager>();
 
   useEffect(() => {
     console.log('setup world manager');
-    manager.current = new WorldManager(worldMapRef.current, minimapRef.current)    ;
+    manager.current = new WorldMapManager(worldMapRef.current, minimapRef.current)    ;
   }, []);
 
   useEffect(() => {
-    if (world && assets && manager.current) {
+    if (game && assets && manager.current) {
       console.log('setup world');
-      manager.current.init(world, assets);
+      manager.current.init(game, assets);
     }
-  }, [world, assets]);
+  }, [game, assets]);
 
   return (
     <div>

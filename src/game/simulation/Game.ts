@@ -9,6 +9,7 @@ import { EntityManager, Entity, ExportData } from '../entity-system/EntityManage
 import { GameInfoComponent, components } from './components';
 import { createGameInfo } from './entities';
 import { setupGame } from './setupGame';
+import { WorldMap } from '../../WorldViewer/WorldMap';
 
 
 export type GameData = {
@@ -22,8 +23,10 @@ export type GameOptions = {
 }
 
 export type Context = {
+  game: Game,
   world: World,
   worldGrid: WorldGrid,
+  worldMap?: WorldMap,
 };
 
 export class Game {
@@ -49,9 +52,11 @@ export class Game {
     const entityManager = new EntityManager();
 
     this.context = {
+      game: this,
       world,
       worldGrid: new WorldGrid(world),
     };
+    entityManager.context = this.context;
     
     for (const comp of components) {
       entityManager.registerComponent<any>(comp);

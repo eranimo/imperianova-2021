@@ -1,7 +1,7 @@
 import { Alert, Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Button, Flex, FormControl, FormLabel, Heading, HStack, IconButton, Input, MenuItem, MenuList, Modal, ModalBody, ModalContent, ModalOverlay, Stack, Tooltip, Wrap } from '@chakra-ui/react';
 import { World as ECS, Entity, System, Component } from 'ape-ecs';
 import { values } from 'lodash';
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { BiMenu, BiPause, BiPlay, BiRefresh } from 'react-icons/bi';
 import { useAsync, useObservable } from 'react-use';
 import { Game } from '../../game/simulation/Game';
@@ -10,6 +10,7 @@ import { GameInfoComponent } from '../../game/simulation/components';
 import { Link } from 'react-router-dom';
 import { GameStore } from '../../game/simulation/GameStore';
 import { LoadGameList, SaveGameList } from './SavedGameList';
+import { GameContext } from '../pages/GameView';
 
 const DateDisplay = observer<{
   game: Game
@@ -130,11 +131,8 @@ const GameMenu = ({
   );
 }
 
-export const GameHeader = ({
-  game,
-}: {
-  game: Game
-}) => {
+export const GameHeader = () => {
+  const game = useContext(GameContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const isPlaying = useObservable(game.isPlaying$, game.isPlaying$.value);
   return (

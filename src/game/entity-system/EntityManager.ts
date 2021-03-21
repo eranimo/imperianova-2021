@@ -7,6 +7,7 @@ import { number, strict } from 'yargs';
 import { EntityRef, EntityObject, Value, IField } from './fields';
 import { Signal } from 'typed-signals';
 import { autorun, configure, makeAutoObservable, makeObservable, observable, runInAction } from 'mobx';
+import { Game, Context } from '../simulation/Game';
 
 /**
  * Type class for a component
@@ -161,6 +162,7 @@ export class EntityManager {
   stats: BehaviorSubject<{
     entityCount: number,
   }>;
+  context: Context = null;
 
   constructor(startTicks: number = 0) {
     this.ticks = startTicks;
@@ -299,6 +301,7 @@ export class EntityManager {
 
   registerSystem(system: System) {
     system.init(this);
+    system.entityManager = this;
     this.systems.push(system);
   }
 
@@ -392,6 +395,10 @@ export class EntityManager {
     for (const system of this.systems) {
       if (system.frequency > 1) {
         const lastTick = this.systemLastTick.get(system);
+        if (lastTick === undefined) {
+          system.update(deltaTime);
+          continue;
+        }
         if ((this.ticks - lastTick) < system.frequency) {
           continue;
         }
@@ -457,6 +464,8 @@ export class Query {
 }
 
 export class System {
+  entityManager: EntityManager
+
   constructor(
     public frequency: number = 1,
   ) {}

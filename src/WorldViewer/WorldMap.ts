@@ -12,6 +12,8 @@ import { Grid2D } from '../utils/Grid2D';
 import { ObservableSet } from '../utils/ObservableSet';
 import { Assets } from './AssetLoader';
 import { Region, WorldMapRegions } from './WorldMapRegions';
+import { colorToNumber } from '../utils';
+import { Game } from '../game/simulation/Game';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -70,6 +72,59 @@ class MapLabel extends PIXI.Container {
   }
 }
 
+type TileState = {
+  terrainType?: TerrainType,
+  population?: number,
+}
+
+interface MapMode {
+  title: string;
+  init?(tileStates: Map<Hex, TileState>): void;
+  setTile(state: TileState): number;
+}
+
+class TerrainMapMode implements MapMode {
+  title = 'Terrain';
+  setTile(state: TileState) {
+    return terrainColors[state.terrainType]
+  }
+}
+
+class PopulationMapMode implements MapMode {
+  title = 'Population';
+  maxPopulation: number;
+
+  init(tileStates: Map<Hex, TileState>) {
+    this.maxPopulation = 0;
+    let populatedTiles = 0;
+    for (const state of tileStates.values()) {
+      if (state.population !== undefined) {
+        this.maxPopulation += state.population;
+        populatedTiles++;
+      }
+    }
+    this.maxPopulation /= populatedTiles;
+  }
+
+  setTile(state: TileState) {
+    if (state.population) {
+      const v = Math.round((state.population / this.maxPopulation) * 255);
+      return colorToNumber([v, v, v]);
+    }
+    return 0x000000;
+  }
+}
+
+export enum MapModeType {
+  Terrain,
+  Population
+}
+
+export const mapModes: Map<MapModeType, MapMode> = new Map([
+  [MapModeType.Terrain, new TerrainMapMode()],
+  [MapModeType.Population, new PopulationMapMode()],
+]);
+
 export class WorldMap {
   public world: World;
   public debugGraphics: PIXI.Graphics;
@@ -103,12 +158,19 @@ export class WorldMap {
   hexMapIconsSprites: Map<Hex, MapIcon>;
   iconsLayer: PIXI.Container;
 
+  tileState: Map<Hex, TileState> = new Map();
+  currentMapMode: MapModeType = MapModeType.Terrain
+  game: Game;
+
   constructor(
     private app: PIXI.Application,
-    world: World,
+    game: Game,
     private assets: Assets
   ) {
-    this.world = world;
+    (window as any).worldMap = this;
+    this.game = game;
+    game.context.worldMap = this;
+    this.world = game.world;
     this.debugGraphics = new PIXI.Graphics();
     this.worldWidth = this.world.hexgrid.pointWidth();
     this.worldHeight = this.world.hexgrid.pointHeight();
@@ -121,7 +183,7 @@ export class WorldMap {
     this.chunkTileLayers = new Map();
     this.chunkDrawTimes = new Map();
     this.regionLabels = new Map();
-    const { width, height } = world.gridSize;
+    const { width, height } = game.world.gridSize;
     this.hexChunk = new Grid2D(width, height);
     this.chunkHexes = new Map();
     this.labelContainer = new PIXI.Container();
@@ -130,8 +192,11 @@ export class WorldMap {
     this.hexGridSprites = new Map();
     this.hexBorderSprites = new Map();
     this.overlayLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+    this.overlayLayer.interactiveChildren = false;
     this.gridLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+    this.gridLayer.interactiveChildren = false;
     this.regionLayer = new PIXI.ParticleContainer(width * height, { tint: true });
+    this.regionLayer.interactiveChildren = false;
 
     this.regionMap = new WorldMapRegions(this.world);
 
@@ -159,7 +224,7 @@ export class WorldMap {
 
     this.cull = new cull.Simple();
 
-    this.onNewWorld(world);
+    this.onNewWorld(this.world);
     this.cull.addList(this.chunksLayer.children, true);
     this.iconsLayer = new PIXI.Container();
     this.hexMapIcons = new Map();
@@ -234,6 +299,27 @@ export class WorldMap {
     this.regionMap.regions.deleted$.subscribe(region => removeRegionLabel(region));
   }
 
+  setMapMode(mapMode: MapModeType) {
+    this.currentMapMode = mapMode;
+    const mapModeInst = mapModes.get(mapMode);
+    if (!mapModeInst) {
+      throw new Error(`Map mode not found: ${mapMode}`);
+    }
+    if (mapModeInst.init) {
+      mapModeInst.init(this.tileState);
+    }
+    for (const [hex, overlaySprite] of this.hexOverlaySprites) {
+      overlaySprite.tint = mapModeInst.setTile(this.tileState.get(hex));
+    }
+  }
+
+  setTileState<K extends keyof TileState>(hex: Hex, key: K, value: TileState[K]) {
+    if (!this.tileState.has(hex)) {
+      this.tileState.set(hex, {});
+    }
+    this.tileState.get(hex)[key] = value;
+  }
+
   setIcon(hex: Hex, icon: string) {
     this.hexMapIcons.set(hex, icon);
   }
@@ -262,6 +348,12 @@ export class WorldMap {
 
     this.renderDebug();
     this.render();
+    console.log('World', world);
+    console.log('WorldMap', this);
+    for (const hex of world.hexgrid) {
+      this.setTileState(hex, 'terrainType', world.getTerrain(hex));
+    }
+    this.setMapMode(this.currentMapMode);
   }
 
   private getChunkForCoordinate(x: number, y: number) {
@@ -304,7 +396,7 @@ export class WorldMap {
       // overlay
       if (!this.hexOverlaySprites.has(hex)) {
         const overlaySprite = new PIXI.Sprite(this.assets.hexTemplate.fullHex);
-        overlaySprite.tint = terrainColors[terrainType];
+        overlaySprite.tint = mapModes.get(this.currentMapMode).setTile(this.tileState.get(hex));
         overlaySprite.position.set(x, y);
         overlaySprite.width = this.assets.hexTemplate.size.width;
         overlaySprite.height = this.assets.hexTemplate.size.height;
@@ -372,6 +464,7 @@ export class WorldMap {
           x + (hexSize.width / 2),
           y + (hexSize.height / 2),
         );
+        this.cull.add(mapIcon, true);
         this.hexMapIconsSprites.set(hex, mapIcon);
         this.iconsLayer.addChild(mapIcon);
       }
