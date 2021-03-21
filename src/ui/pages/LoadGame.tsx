@@ -5,12 +5,12 @@ import { useAsync, usePromise } from 'react-use';
 import { GameStore } from '../../game/simulation/GameStore';
 import { Link as RouteLink } from 'react-router-dom';
 import { Button } from '@chakra-ui/button';
-import { SavedGameList } from '../components/SavedGameList';
+import { LoadGameList } from '../components/SavedGameList';
 
 export const LoadGame = () => {
   return (
     <MenuContainer title="Load Game">
-      <SavedGameList />
+      <LoadGameList />
     </MenuContainer>
   );
 }

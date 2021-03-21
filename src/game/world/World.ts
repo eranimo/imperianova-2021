@@ -76,6 +76,7 @@ export class World {
 
   static fromData(worldData: WorldData) {
     const world = new World();
+    world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap);
     world.setWorldRivers(worldData.rivers);

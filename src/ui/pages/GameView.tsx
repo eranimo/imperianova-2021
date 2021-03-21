@@ -49,16 +49,14 @@ export const GameView = ({ location }) => {
     options = JSON.parse(location.state.options as any) as GameOptions;
   }
 
-  let saveID = location.state?.saveID;
-
-  console.log('[GameView]', options, saveID);
-
   useEffect(() => {
+    const saveID = location.state?.saveID
+    console.log('[GameView]', options, saveID);
     setGame(null);
     if (saveID) {
       GameStore.load(saveID).then(saveData => {
         console.log('[GameView] loaded game state', saveData);
-        setGame(Game.load(saveData));
+        setGame(Game.load(saveData, saveID));
       });
     } else {
       console.log('[GameView] new game with options', options);
@@ -66,7 +64,7 @@ export const GameView = ({ location }) => {
       testRoads(game.world, game.context.worldGrid);
       setGame(game);
     }
-  }, [saveID]);
+  }, [location]);
 
   return (
     <AssetLoader>

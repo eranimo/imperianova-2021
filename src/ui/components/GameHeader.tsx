@@ -9,7 +9,7 @@ import { observer } from 'mobx-react-lite';
 import { GameInfoComponent } from '../../game/simulation/components';
 import { Link } from 'react-router-dom';
 import { GameStore } from '../../game/simulation/GameStore';
-import { SavedGameList } from './SavedGameList';
+import { LoadGameList, SaveGameList } from './SavedGameList';
 
 const DateDisplay = observer<{
   game: Game
@@ -22,7 +22,13 @@ const DateDisplay = observer<{
   );
 });
 
-const SaveMenu = ({ game, setPage } : { game: Game, setPage: (page: GameMenuPage) => void }) => {
+type MenuPageProps = {
+  game: Game,
+  setPage: (page: GameMenuPage) => void,
+  closeMenu: () => void,
+}
+
+const SaveMenu = ({ game, setPage, closeMenu }: MenuPageProps) => {
   const [name, setName] = useState('');
   const [isSaved, setSaved] = useState(false);
 
@@ -51,16 +57,21 @@ const SaveMenu = ({ game, setPage } : { game: Game, setPage: (page: GameMenuPage
           <Heading size="md">Save Game</Heading>
           <Button size="sm" variant="ghost" onClick={() => setPage('main')}>Back</Button>
         </Flex>
-        <FormControl
-          id="name"
-          isRequired
-          mt={3}
-          mb={5}
-        >
-          <FormLabel>Save name</FormLabel>
-          <Input autoFocus isRequired value={name} onChange={e => setName(e.target.value)} name="name" />
-        </FormControl>
-        <Button isDisabled={!name?.trim()} type="submit">Save</Button>
+        <Box mt={5}>
+          <SaveGameList game={game} onLoad={closeMenu} />
+        </Box>
+        <Box>
+          <FormControl
+            id="name"
+            isRequired
+            mt={3}
+            mb={5}
+          >
+            <FormLabel>New save name</FormLabel>
+            <Input autoFocus isRequired value={name} onChange={e => setName(e.target.value)} name="name" />
+          </FormControl>
+          <Button isDisabled={!name?.trim()} type="submit">Save</Button>
+        </Box>
       </form>
     </Box>
   )
@@ -70,11 +81,7 @@ const LoadMenu = ({
   game,
   setPage,
   closeMenu,
-} : {
-  game: Game,
-  setPage: (page: GameMenuPage) => void,
-  closeMenu: () => void,
-}) => {
+}: MenuPageProps) => {
   return (
     <Box>
       <Flex justifyContent="space-between">
@@ -82,7 +89,7 @@ const LoadMenu = ({
           <Button size="sm" variant="ghost" onClick={() => setPage('main')}>Back</Button>
         </Flex>
       <Stack mt={5}>
-        <SavedGameList onLoad={closeMenu} />
+        <LoadGameList onLoad={closeMenu} />
       </Stack>
     </Box>
   );
@@ -99,9 +106,9 @@ const GameMenu = ({
   const [page, setPage] = useState<GameMenuPage>('main');
 
   if (page === 'save') {
-    return <SaveMenu game={game} setPage={setPage} />;
+    return <SaveMenu game={game} setPage={setPage} closeMenu={closeMenu} />;
   } else if (page === 'load') {
-    return <LoadMenu game={game} setPage={setPage} closeMenu={closeMenu}  />;
+    return <LoadMenu game={game} setPage={setPage} closeMenu={closeMenu} />;
   }
 
   return (

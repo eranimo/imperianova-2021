@@ -4,25 +4,19 @@ import React from 'react';
 import { Link, useHistory } from 'react-router-dom';
 import { useAsync, useAsyncRetry } from 'react-use';
 import { SavedGameEntry, GameStore } from '../../game/simulation/GameStore';
+import { Game } from '../../game/simulation/Game';
 
 const SavedGameEntryItem = ({
   entry,
-  onLoad,
+  actionLabel,
+  onClickAction,
   onDelete,
 }: {
   entry: SavedGameEntry,
-  onLoad?: () => void,
+  actionLabel: string,
+  onClickAction?: () => void,
   onDelete: () => void,
 }) => {
-  const history = useHistory();
-
-  const onClickLoad = () => {
-    history.push('/game', {
-      saveID: entry.id,
-    });
-    if (onLoad) onLoad();
-  }
-
   const onClickDelete = async () => {
     await GameStore.delete(entry.id);
     onDelete();
@@ -42,16 +36,17 @@ const SavedGameEntryItem = ({
       </Box>
       <Flex justifyContent="center" alignItems="center" mr={2}>
         <Stack direction="row">
-          <Button size="sm" colorScheme="red" onClick={onClickDelete}>Delete</Button>
-          <Button size="sm" onClick={onClickLoad}>Load</Button>
+          <Button size="sm" variant="ghost" colorScheme="red" onClick={onClickDelete}>Delete</Button>
+          <Button size="sm" onClick={onClickAction}>{actionLabel}</Button>
         </Stack>
       </Flex>
     </Flex>
   )
 }
 
-export const SavedGameList = ({ onLoad }: { onLoad?: () => void }) => {
+export const LoadGameList = ({ onLoad, }: { onLoad?: () => void }) => {
   const { loading, error, value, retry } = useAsyncRetry(GameStore.getSavedGames);
+  const history = useHistory();
 
   let content;
   if (loading) {
@@ -66,11 +61,60 @@ export const SavedGameList = ({ onLoad }: { onLoad?: () => void }) => {
   } else {
     content = (
       <Stack>
-        {value.map(item => (
+        {value.map(entry => (
           <SavedGameEntryItem
-            entry={item}
-            key={item.id}
-            onLoad={onLoad}
+            entry={entry}
+            key={entry.id}
+            actionLabel="Load"
+            onClickAction={() => {
+              history.push('/game', {
+                saveID: entry.id,
+              });
+              onLoad();
+            }}
+            onDelete={() => retry()}
+          />
+        ))}
+      </Stack>
+    );
+  }
+
+  return content;
+}
+
+export const SaveGameList = ({
+  game,
+  onLoad
+}: {
+  game: Game,
+  onLoad?: () => void
+}) => {
+  const { loading, error, value, retry } = useAsyncRetry(GameStore.getSavedGames);
+  const history = useHistory();
+
+  let content;
+  if (loading) {
+    content = 'Loading...';
+  } else if (value.length === 0) {
+    content = (
+      <Box>
+        <Box mb={5}>No saved games.</Box>
+      </Box>
+    );
+  } else {
+    content = (
+      <Stack>
+        {value.map(entry => (
+          <SavedGameEntryItem
+            entry={entry}
+            key={entry.id}
+            actionLabel="Overwrite"
+            onClickAction={() => {
+              GameStore.overwrite(game.export(), entry.id)
+                .then(() => {
+                  onLoad();
+                });
+            }}
             onDelete={() => retry()}
           />
         ))}

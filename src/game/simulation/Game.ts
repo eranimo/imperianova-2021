@@ -31,6 +31,7 @@ export class Game {
   entityManager: EntityManager;
   gameInfo: Entity;
   isPlaying$: BehaviorSubject<boolean>;
+  saveID?: string;
 
   watchedEntities$: ObservableSet<Entity>;
   entityUpdates$: Subject<Entity>;
@@ -70,9 +71,10 @@ export class Game {
     return game;
   }
 
-  static load(data: GameData) {
+  static load(data: GameData, saveID: string) {
     const world = World.fromData(data.world);
     const game = new Game(world);
+    game.saveID = saveID;
     game.entityManager.import(data.entityData);
     return game;
   }
