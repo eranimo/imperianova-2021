@@ -8,6 +8,7 @@ import { Random } from '../../utils/Random';
 export function setupGame(
   game: Game,
 ) {
+  console.log('setup game');
   const random = new Random('123'); // TODO: game seed option
   /**
    * create initial pops

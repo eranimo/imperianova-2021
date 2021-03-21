@@ -2,7 +2,7 @@ import Deltaframe from "deltaframe";
 import { BehaviorSubject, Subject } from 'rxjs';
 import { ObservableSet } from '../../utils/ObservableSet';
 import { World } from '../world/World';
-import { WorldData } from '../world/WorldGenerator';
+import { WorldData, WorldGeneratorOptions, WorldGenerator } from '../world/WorldGenerator';
 import { registerSystems } from './systems';
 import { WorldGrid } from '../world/WorldGrid';
 import { EntityManager, Entity, ExportData } from '../entity-system/EntityManager';
@@ -14,6 +14,11 @@ import { setupGame } from './setupGame';
 export type GameData = {
   world: WorldData,
   entityData: ExportData,
+}
+
+export type GameOptions = {
+  numStartingPopulation: number,
+  world: WorldGeneratorOptions,
 }
 
 export type Context = {
@@ -57,7 +62,9 @@ export class Game {
     this.entityManager = entityManager;
   }
 
-  static create(world: World) {
+  static create(options: GameOptions) {
+    const worldGen = new WorldGenerator();
+    const world = worldGen.generate(options.world);
     const game = new Game(world);
     setupGame(game);
     return game;
@@ -67,7 +74,7 @@ export class Game {
     const world = World.fromData(data.world);
     const game = new Game(world);
     game.entityManager.import(data.entityData);
-    return Game;
+    return game;
   }
 
   export(): GameData {

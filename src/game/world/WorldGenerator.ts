@@ -27,9 +27,7 @@ export class WorldGenerator {
   options: WorldGeneratorOptions;
 
   @logGroupTime('generate', true)
-  generate(
-    options: WorldGeneratorOptions
-  ) {
+  generate(options: WorldGeneratorOptions) {
     this.world = new World();
     this.options = options;
     this.world.setWorldSize(options.size);

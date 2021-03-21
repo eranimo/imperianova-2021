@@ -47,6 +47,10 @@ class WorldManager {
     });
   }
 
+  destroy() {
+    this.app.destroy();
+  }
+
   init(world: World, assets: Assets) {
     // render
     const renderer = new WorldMap(this.app, world, assets);

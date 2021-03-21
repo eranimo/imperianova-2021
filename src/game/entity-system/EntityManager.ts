@@ -218,7 +218,9 @@ export class EntityManager {
             data[key] = value;
           }
         }
-        return new ComponentValue(data, component);
+        const cv = new ComponentValue(data, component);
+        cv.attach(entities.get(compExport.entityID));
+        return cv;
       }));
     }
     this.updateStats();
