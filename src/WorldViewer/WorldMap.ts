@@ -160,7 +160,7 @@ export class WorldMap {
     this.cull = new cull.Simple();
 
     this.onNewWorld(world);
-    this.cull.addList(this.chunksLayer.children);
+    this.cull.addList(this.chunksLayer.children, true);
     this.iconsLayer = new PIXI.Container();
     this.hexMapIcons = new Map();
     this.hexMapIconsSprites = new Map();
@@ -306,6 +306,7 @@ export class WorldMap {
         overlaySprite.position.set(x, y);
         overlaySprite.width = this.assets.hexTemplate.size.width;
         overlaySprite.height = this.assets.hexTemplate.size.height;
+        this.cull.add(overlaySprite, true);
         this.overlayLayer.addChild(overlaySprite);
         this.hexOverlaySprites.set(hex, overlaySprite);
       }
@@ -316,6 +317,7 @@ export class WorldMap {
         gridSprite.position.set(x, y);
         gridSprite.width = this.assets.hexTemplate.size.width;
         gridSprite.height = this.assets.hexTemplate.size.height;
+        this.cull.add(gridSprite, true);
         this.gridLayer.addChild(gridSprite);
         this.hexGridSprites.set(hex, gridSprite);
       }
@@ -323,6 +325,7 @@ export class WorldMap {
       if (this.hexBorderSprites.has(hex)) {
         for (const [dir, sprite] of this.hexBorderSprites.get(hex)) {
           sprite.destroy();
+          this.cull.remove(sprite);
           this.regionLayer.removeChild(sprite);
           this.hexBorderSprites.get(hex).delete(dir);
         }
@@ -342,6 +345,7 @@ export class WorldMap {
             borderSprite.position.set(x, y);
             borderSprite.width = this.assets.hexTemplate.size.width;
             borderSprite.height = this.assets.hexTemplate.size.height;
+            this.cull.add(borderSprite, true);
             this.regionLayer.addChild(borderSprite);
             borderSprite.tint = region.color.toNumber();
             hexBorderSprites.set(dir, borderSprite);
