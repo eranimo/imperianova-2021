@@ -166,11 +166,13 @@ export class WorldMap {
     this.hexMapIconsSprites = new Map();
 
     // setup events
+    this.chunksLayer.visible = false;
     document.addEventListener('keyup', event => {
       if (event.key === 'd') {
         this.debugGraphics.visible = !this.debugGraphics.visible;
       } else if (event.key === 'o') {
         this.overlayLayer.visible = !this.overlayLayer.visible;
+        this.chunksLayer.visible = !this.overlayLayer.visible;
       } else if (event.key === 'g') {
         this.gridLayer.visible = !this.gridLayer.visible;
       }
