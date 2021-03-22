@@ -8,3 +8,13 @@ declare module "worker-loader!*" {
   // export = WebpackWorker;
   export default WebpackWorker;
 }
+
+declare module "file-loader!*" {
+  const value: any;
+  export default value;
+}
+
+declare module "raw-loader!*" {
+  const value: any;
+  export default value;
+}

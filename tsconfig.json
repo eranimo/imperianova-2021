@@ -25,6 +25,7 @@
   "include": ["src", "scripts", "./typings/custom.d.ts"],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/assets"
   ]
 }

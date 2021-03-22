@@ -1,4 +1,5 @@
 import { Size } from 'src/types';
+import { Texture, BaseTexture } from './pixi';
 
 export type TilesetOptions = {
   tileSize: Size,
@@ -10,10 +11,10 @@ export class Tileset {
   tileSize: Size;
   columns: number;
   tilePadding: number;
-  private textureCache: Map<number, PIXI.Texture>;
+  private textureCache: Map<number, Texture>;
 
   constructor(
-    public baseTexture: PIXI.BaseTexture,
+    public baseTexture: BaseTexture,
     options: TilesetOptions
   ) {
     this.tileSize = options.tileSize;
@@ -30,7 +31,7 @@ export class Tileset {
     const { columns, tileSize, tilePadding } = this;
     const x = Math.round((index % columns) * (tileSize.width + tilePadding));
     const y = Math.round((Math.floor(index / columns)) * (tileSize.height + tilePadding))
-    const texture = new PIXI.Texture(
+    const texture = new Texture(
       this.baseTexture,
       new PIXI.Rectangle(x, y, tileSize.width, tileSize.height)
     );

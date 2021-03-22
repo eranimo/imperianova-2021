@@ -4,7 +4,6 @@ import { World } from '../../game/world/World';
 import { WorldGeneratorOptions, WorldGenerator } from '../../game/world/WorldGenerator';
 import { WorldGrid } from '../../game/world/WorldGrid';
 import { times } from 'lodash';
-import { AssetLoader } from '../../WorldViewer/AssetLoader';
 import { WorldViewer } from '../../WorldViewer/WorldViewer';
 import { GameHeader } from '../components/GameHeader';
 import { Game, GameOptions } from '../../game/simulation/Game';
@@ -68,11 +67,11 @@ export const GameView = ({ location }) => {
   }, [location]);
 
   return (
-    <AssetLoader>
+    <>
       {gameRef && <GameContext.Provider value={gameRef}>
         <GameHeader />
         <WorldViewer />
       </GameContext.Provider>}
-    </AssetLoader>
+    </>
   );
 }

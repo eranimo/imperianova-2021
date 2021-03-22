@@ -47,8 +47,7 @@ module.exports = {
       },
       {
         test: /\.json$/,
-        loader: 'file-loader',
-        type: 'javascript/auto'
+        type: 'asset/resource'
       }
     ],
   },
@@ -80,9 +79,6 @@ module.exports = {
     globalObject: 'self'
   },
   plugins: [
-    new webpack.ProvidePlugin({
-      PIXI: 'pixi.js'
-    }),
     new HtmlWebpackPlugin({
       template: "./src/index.html",
     }),

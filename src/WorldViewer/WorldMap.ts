@@ -1,7 +1,6 @@
 import cull from 'pixi-cull';
 import { CompositeRectTileLayer } from 'pixi-tilemap';
 import { Viewport } from 'pixi-viewport';
-import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { OFFSET_Y } from '../game/world/hexTile';
 import { terrainColors, TerrainType } from '../game/world/terrain';
@@ -10,10 +9,19 @@ import { adjacentDirections, Coord, CoordArray, Direction, directionCorners, dir
 import { Color } from '../utils/Color';
 import { Grid2D } from '../utils/Grid2D';
 import { ObservableSet } from '../utils/ObservableSet';
-import { Assets } from './AssetLoader';
 import { Region, WorldMapRegions } from './WorldMapRegions';
 import { colorToNumber } from '../utils';
 import { Game } from '../game/simulation/Game';
+import {
+  Application,
+  Container,
+  Sprite,
+  Texture,
+  ParticleContainer,
+  Graphics,
+  Text,
+} from './pixi';
+import { Assets } from './WorldViewer.worker';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -21,14 +29,14 @@ const CHUNK_HEIGHT = 10;
 const DEBUG_RIVER_COLOR = 0x0000FF;
 const DEBUG_ROAD_COLOR = 0x80530b;
 
-class MapIcon extends PIXI.Container{
-  sprite: PIXI.Sprite;
+class MapIcon extends Container{
+  sprite: Sprite;
 
   constructor(filename: string) {
     super();
 
-    // const t = PIXI.Texture.WHITE;
-    // const s = new PIXI.Sprite(t);
+    // const t = Texture.WHITE;
+    // const s = new Sprite(t);
     // s.width = 64;
     // s.height = 60;
     // s.anchor.set(0.5);
@@ -38,8 +46,8 @@ class MapIcon extends PIXI.Container{
       /* webpackMode: "lazy-once" */
       `../assets/icons/${filename}.svg`
     ).then((src) => {
-      PIXI.Texture.fromURL(src.default).then(texture => {
-        const sprite = new PIXI.Sprite(texture);
+      Texture.fromURL(src.default).then(texture => {
+        const sprite = new Sprite(texture);
         this.sprite = sprite;
         sprite.width = 48;
         sprite.height = 48;
@@ -52,16 +60,16 @@ class MapIcon extends PIXI.Container{
 }
 
 
-class MapLabel extends PIXI.Container {
-  labelText: PIXI.Text;
+class MapLabel extends Container {
+  labelText: Text;
 
   constructor(
     label: string,
     fontSize: number,
   ) {
     super();
-    this.labelText = new PIXI.Text(label, {
-      font: '32px Tahoma',
+    this.labelText = new Text(label, {
+      // font: '32px Tahoma',
       fill: '#FFF',
       align: 'center',
       stroke: '#111',
@@ -127,7 +135,7 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
 
 export class WorldMap {
   public world: World;
-  public debugGraphics: PIXI.Graphics;
+  public debugGraphics: Graphics;
   public worldWidth: number;
   public worldHeight: number;
 
@@ -138,32 +146,32 @@ export class WorldMap {
   hexChunk: Grid2D<string>;
   chunkHexes: Map<string, { x: number, y: number }[]>;
   chunkDrawTimes: Map<string, number>;
-  chunksLayer: PIXI.Container;
+  chunksLayer: Container;
 
-  overlayLayer: PIXI.ParticleContainer;
-  gridLayer: PIXI.ParticleContainer;
-  regionLayer: PIXI.ParticleContainer;
+  overlayLayer: ParticleContainer;
+  gridLayer: ParticleContainer;
+  regionLayer: ParticleContainer;
 
-  hexOverlaySprites: Map<Hex, PIXI.Sprite>;
-  hexGridSprites: Map<Hex, PIXI.Sprite>;
-  hexBorderSprites: Map<Hex, Map<Direction, PIXI.Sprite>>;
+  hexOverlaySprites: Map<Hex, Sprite>;
+  hexGridSprites: Map<Hex, Sprite>;
+  hexBorderSprites: Map<Hex, Map<Direction, Sprite>>;
 
   cull: cull.Simple;
 
-  labelContainer: PIXI.Container;
+  labelContainer: Container;
   regionLabels: Map<Region, MapLabel[]>;
   regionMap: WorldMapRegions;
 
   hexMapIcons: Map<Hex, string>;
   hexMapIconsSprites: Map<Hex, MapIcon>;
-  iconsLayer: PIXI.Container;
+  iconsLayer: Container;
 
   tileState: Map<Hex, TileState> = new Map();
   currentMapMode: MapModeType = MapModeType.Terrain
   game: Game;
 
   constructor(
-    private app: PIXI.Application,
+    private app: Application,
     game: Game,
     private assets: Assets
   ) {
@@ -171,10 +179,10 @@ export class WorldMap {
     this.game = game;
     game.context.worldMap = this;
     this.world = game.world;
-    this.debugGraphics = new PIXI.Graphics();
+    this.debugGraphics = new Graphics();
     this.worldWidth = this.world.hexgrid.pointWidth();
     this.worldHeight = this.world.hexgrid.pointHeight();
-    this.chunksLayer = new PIXI.Container();
+    this.chunksLayer = new Container();
 
     this.chunkDirty = new Map();
     this.chunkLayerToChunk = new Map();
@@ -186,17 +194,14 @@ export class WorldMap {
     const { width, height } = game.world.gridSize;
     this.hexChunk = new Grid2D(width, height);
     this.chunkHexes = new Map();
-    this.labelContainer = new PIXI.Container();
+    this.labelContainer = new Container();
 
     this.hexOverlaySprites = new Map();
     this.hexGridSprites = new Map();
     this.hexBorderSprites = new Map();
-    this.overlayLayer = new PIXI.ParticleContainer(width * height, { tint: true });
-    this.overlayLayer.interactiveChildren = false;
-    this.gridLayer = new PIXI.ParticleContainer(width * height, { tint: true });
-    this.gridLayer.interactiveChildren = false;
-    this.regionLayer = new PIXI.ParticleContainer(width * height, { tint: true });
-    this.regionLayer.interactiveChildren = false;
+    this.overlayLayer = new ParticleContainer(width * height, { tint: true });
+    this.gridLayer = new ParticleContainer(width * height, { tint: true });
+    this.regionLayer = new ParticleContainer(width * height, { tint: true });
 
     this.regionMap = new WorldMapRegions(this.world);
 
@@ -225,8 +230,8 @@ export class WorldMap {
     this.cull = new cull.Simple();
 
     this.onNewWorld(this.world);
-    this.cull.addList(this.chunksLayer.children, true);
-    this.iconsLayer = new PIXI.Container();
+    this.cull.addList(this.chunksLayer.children as any, true);
+    this.iconsLayer = new Container();
     this.hexMapIcons = new Map();
     this.hexMapIconsSprites = new Map();
 
@@ -391,27 +396,25 @@ export class WorldMap {
         }
       }
 
-      const hexSize = this.assets.hexTemplate.size;
-
       // overlay
       if (!this.hexOverlaySprites.has(hex)) {
-        const overlaySprite = new PIXI.Sprite(this.assets.hexTemplate.fullHex);
+        const overlaySprite = new Sprite(this.assets.hexMask);
         overlaySprite.tint = mapModes.get(this.currentMapMode).setTile(this.tileState.get(hex));
         overlaySprite.position.set(x, y);
-        overlaySprite.width = this.assets.hexTemplate.size.width;
-        overlaySprite.height = this.assets.hexTemplate.size.height;
-        this.cull.add(overlaySprite, true);
+        overlaySprite.width = this.assets.hexMask.width;
+        overlaySprite.height = this.assets.hexMask.height;
+        this.cull.add(overlaySprite as any, true);
         this.overlayLayer.addChild(overlaySprite);
         this.hexOverlaySprites.set(hex, overlaySprite);
       }
 
       if (!this.hexGridSprites.has(hex)) {
-        const gridSprite = new PIXI.Sprite(this.assets.gridTexture);
+        const gridSprite = new Sprite(this.assets.gridTexture);
         gridSprite.alpha = 0.25;
         gridSprite.position.set(x, y);
-        gridSprite.width = this.assets.hexTemplate.size.width;
-        gridSprite.height = this.assets.hexTemplate.size.height;
-        this.cull.add(gridSprite, true);
+        gridSprite.width = this.assets.hexMask.width;
+        gridSprite.height = this.assets.hexMask.height;
+        this.cull.add(gridSprite as any, true);
         this.gridLayer.addChild(gridSprite);
         this.hexGridSprites.set(hex, gridSprite);
       }
@@ -419,7 +422,7 @@ export class WorldMap {
       if (this.hexBorderSprites.has(hex)) {
         for (const [dir, sprite] of this.hexBorderSprites.get(hex)) {
           sprite.destroy();
-          this.cull.remove(sprite);
+          this.cull.remove(sprite as any);
           this.regionLayer.removeChild(sprite);
           this.hexBorderSprites.get(hex).delete(dir);
         }
@@ -431,15 +434,15 @@ export class WorldMap {
         if (tileIDMap === undefined) {
           throw new Error('Tile border map not calculated');
         }
-        const hexBorderSprites = new Map<Direction, PIXI.Sprite>();
+        const hexBorderSprites = new Map<Direction, Sprite>();
         for (const dir of directionIndexOrder) {
           const tileID = tileIDMap.get(dir);
           if (tileID !== undefined) {
-            const borderSprite = new PIXI.Sprite(this.assets.borderTileset.getTile(tileID));
+            const borderSprite = new Sprite(this.assets.borderTileset.getTile(tileID));
             borderSprite.position.set(x, y);
-            borderSprite.width = this.assets.hexTemplate.size.width;
-            borderSprite.height = this.assets.hexTemplate.size.height;
-            this.cull.add(borderSprite, true);
+            borderSprite.width = this.assets.hexMask.width;
+            borderSprite.height = this.assets.hexMask.height;
+            this.cull.add(borderSprite as any, true);
             this.regionLayer.addChild(borderSprite);
             borderSprite.tint = region.color.toNumber();
             hexBorderSprites.set(dir, borderSprite);
@@ -458,13 +461,13 @@ export class WorldMap {
       if (this.hexMapIcons.has(hex)) {
         const iconName = this.hexMapIcons.get(hex);
         const mapIcon = new MapIcon(iconName);
-        mapIcon.width = hexSize.width;
-        mapIcon.height = hexSize.height;
+        mapIcon.width = this.assets.hexMask.width;
+        mapIcon.height = this.assets.hexMask.height;
         mapIcon.position.set(
-          x + (hexSize.width / 2),
-          y + (hexSize.height / 2),
+          x + (this.assets.hexMask.width / 2),
+          y + (this.assets.hexMask.height / 2),
         );
-        this.cull.add(mapIcon, true);
+        this.cull.add(mapIcon as any, true);
         this.hexMapIconsSprites.set(hex, mapIcon);
         this.iconsLayer.addChild(mapIcon);
       }
@@ -501,7 +504,7 @@ export class WorldMap {
     console.log(`Drawing ${this.chunkHexes.size} chunks`);
     for (const chunkKey of this.chunkHexes.keys()) {
       const terrainLayer = new CompositeRectTileLayer(0, [
-        new PIXI.Texture(this.assets.hexSectionTileset.tilesetTexture),
+        new Texture(this.assets.hexSectionTileset.tilesetTexture),
       ]);
       this.chunkTileLayers.set(chunkKey, [terrainLayer]);
       this.chunksLayer.addChild(terrainLayer as any);

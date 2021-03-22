@@ -7,15 +7,16 @@ export class HexTemplate {
   size: Size;
 
   constructor(
-    template: PIXI.LoaderResource,
+    template: PIXI.Texture,
   ) {
     this.size = { width: 64, height: 60 };
-    const templateImage = (template.texture.baseTexture.resource as any).source as HTMLImageElement;
+    const templateImage = (template.baseTexture.resource as any).data as any;
+    console.dir(template);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(templateImage, 0, 0);
-    const tileWidth = templateImage.width;
-    const tileHeight = templateImage.height;
+    ctx.drawImage(new ImageData(templateImage, template.width, template.height) as any, 0, 0);
+    const tileWidth = template.width;
+    const tileHeight = template.height;
     const textureBuffer = new Float32Array(tileWidth * tileHeight * 4);
     const imageData = ctx.getImageData(0, 0, tileWidth, tileHeight);
     for (let x = 0; x < tileWidth; x++) {

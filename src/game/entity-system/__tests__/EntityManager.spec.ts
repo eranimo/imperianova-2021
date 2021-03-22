@@ -71,36 +71,36 @@ describe('Entity', () => {
     expect(pos.value.num).toBe(2);
   });
 
-  it('changes', () => {
-    const Deep = new Component<DeepType>('Deep')
-    const entity = manager.createEntity();
-    manager.registerComponent(Deep);
-    const pos = entity.addComponent(Deep, ({
-      num: 1,
-      foo: {
-        bar: {
-          baz: 1,
-        }
-      }
-    }));
+  // it('changes', () => {
+  //   const Deep = new Component<DeepType>('Deep')
+  //   const entity = manager.createEntity();
+  //   manager.registerComponent(Deep);
+  //   const pos = entity.addComponent(Deep, ({
+  //     num: 1,
+  //     foo: {
+  //       bar: {
+  //         baz: 1,
+  //       }
+  //     }
+  //   }));
     
-    let didReact = false;
-    reaction(
-      () => pos.value.num,
-      () => didReact = true
-    );
-    pos.value.num = 2;
-    manager.update();
-    expect(didReact).toBe(true);
+  //   let didReact = false;
+  //   reaction(
+  //     () => pos.value.num,
+  //     () => didReact = true
+  //   );
+  //   pos.value.num = 2;
+  //   manager.update();
+  //   expect(didReact).toBe(true);
 
-    didReact = false;
-    reaction(
-      () => pos.value.foo.bar.baz,
-      () => didReact = true
-    );
-    pos.value.foo.bar.baz = 2;
-    expect(didReact).toBe(true);
-  });
+  //   didReact = false;
+  //   reaction(
+  //     () => pos.value.foo.bar.baz,
+  //     () => didReact = true
+  //   );
+  //   pos.value.foo.bar.baz = 2;
+  //   expect(didReact).toBe(true);
+  // });
 
   it('export, reset, and import', () => {
 

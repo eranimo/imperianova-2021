@@ -3,20 +3,20 @@ import { MultiMap } from '../utils/MultiMap';
 import { Hex, World } from '../game/world/World';
 import { DirectionMap, directionIndexOrder, adjacentDirections } from '../types';
 import { terrainTransitions, TerrainType, terrainTypeTitles } from '../game/world/terrain';
-
+import { Texture, Rectangle, BaseTexture } from './pixi';
 
 export class HexSectionTileset {
   /**
    * Map of hex section IDs to available variants
    */
   tileSectionVariants: MultiMap<number, {
-    texture: PIXI.Texture,
+    texture: Texture,
     tileDef: TilesetDefinitionTile
   }>;
 
   constructor(
     def: TilesetDefinition,
-    public tilesetTexture: PIXI.BaseTexture,
+    public tilesetTexture: BaseTexture,
   ) {
     this.tileSectionVariants = new MultiMap();
 
@@ -24,9 +24,9 @@ export class HexSectionTileset {
     for (const tileVariant of def.tiles) {
       const x = Math.round((tileVariant.index % columns) * (tileSize.width + tilePadding));
       const y = Math.round((Math.floor(tileVariant.index / columns)) * (tileSize.height + tilePadding))
-      const texture = new PIXI.Texture(
+      const texture = new Texture(
         tilesetTexture,
-        new PIXI.Rectangle(x, y, tileSize.width, tileSize.height)
+        new Rectangle(x, y, tileSize.width, tileSize.height)
       );
       this.tileSectionVariants.add(tileVariant.variant.id, {
         texture,

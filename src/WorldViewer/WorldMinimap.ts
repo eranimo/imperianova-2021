@@ -4,24 +4,24 @@ import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
 import { terrainColors } from '../game/world/terrain';
-import { Assets } from './AssetLoader';
-
+import { Assets } from './WorldViewer.worker';
+import { Application, Container, Texture, Sprite, Point, ParticleContainer } from './pixi';
 
 export class WorldMinimap {
-  container: PIXI.Container;
-  map: PIXI.ParticleContainer;
-  hexSprites: Map<Hex, PIXI.Sprite>;
-  minimapPan: Subject<PIXI.Point>;
+  container: Container;
+  map: ParticleContainer;
+  hexSprites: Map<Hex, Sprite>;
+  minimapPan: Subject<Point>;
 
   constructor(
-    app: PIXI.Application,
+    app: Application,
     public world: World,
     private assets: Assets,
     private size: Size,
     viewport$: BehaviorSubject<Viewport>,
   ) {
-    this.container = new PIXI.Container();
-    this.map = new PIXI.ParticleContainer(world.gridSize.width * world.gridSize.height, {
+    this.container = new Container();
+    this.map = new ParticleContainer(world.gridSize.width * world.gridSize.height, {
       tint: true,
     });
     this.container.addChild(this.map);
@@ -40,20 +40,19 @@ export class WorldMinimap {
     world.hexgrid.forEach(hex => {
       const position = scale(this.world.getHexPosition(hex.x, hex.y));
       const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
-      const hexSprite = new PIXI.Sprite(assets.hexTemplate.fullHex);
+      const hexSprite = new Sprite(assets.hexMask);
       hexSprite.tint = terrainColors[terrainType];
       hexSprite.position.set(
         position[0],
         position[1],
       );
-      hexSprite.width = (assets.hexTemplate.size.width / worldWidth) * size.width;
-      hexSprite.height = (assets.hexTemplate.size.height / worldHeight) * size.height;
+      hexSprite.width = (assets.hexMask.width / worldWidth) * size.width;
+      hexSprite.height = (assets.hexMask.height / worldHeight) * size.height;
       this.map.addChild(hexSprite);
       this.hexSprites.set(hex, hexSprite);
     });
 
-    const frame = new PIXI.Sprite(PIXI.Texture.WHITE);
-    frame.interactive = false;
+    const frame = new Sprite(Texture.WHITE);
     const updateFrame = viewport => {
       frame.width = (viewport.worldScreenWidth / worldWidth) * size.width;
       frame.height = (viewport.worldScreenHeight / worldHeight) * size.height;
@@ -63,13 +62,13 @@ export class WorldMinimap {
       );
     }
     updateFrame(viewport$.value);
-    frame.filters = [new GlowFilter({
-      color: 0xFFFFFF,
-      distance: 2,
-      outerStrength: 2,
-      innerStrength: 2,
-      knockout: true,
-    })];
+    // frame.filters = [new GlowFilter({
+    //   color: 0xFFFFFF,
+    //   distance: 2,
+    //   outerStrength: 2,
+    //   innerStrength: 2,
+    //   knockout: true,
+    // })];
 
     viewport$.subscribe(viewport => {
       updateFrame(viewport);
@@ -78,7 +77,7 @@ export class WorldMinimap {
 
     let isDragging = false;
     this.minimapPan = new Subject();
-    const getPoint = event => new PIXI.Point(
+    const getPoint = event => new Point(
       (event.data.global.x / size.width) * worldWidth,
       (event.data.global.y / size.height) * worldHeight
     );
