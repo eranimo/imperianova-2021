@@ -1,11 +1,15 @@
 import { expose } from 'threads/worker';
 import './patch';
-import { Viewport } from 'pixi-viewport';
+import { Viewport, Plugin } from 'pixi-viewport';
 import { Tileset } from './Tileset';
 import { HexSectionTileset } from './HexSectionTileset';
 import { decode } from 'fast-png';
 import tilesetJson from '../assets/tileset.json';
-import { Application, Sprite, Texture } from './pixi';
+import { Application, Sprite, Texture, Point } from './pixi';
+import { WorldMapState } from './worldMapState';
+import { WorldMinimap } from './WorldMinimap';
+import { MapView } from 'structurae';
+import { BehaviorSubject } from 'rxjs';
 
 export type Assets = {
   borderTileset: Tileset,
@@ -19,114 +23,95 @@ interface IAssetContext {
   assets: Assets | null
 }
 
-function setup(
+export type KeyDirection = 'up' | 'down' | 'left' | 'right';
+
+let app: Application;
+let minimap: WorldMinimap;
+let viewport: Viewport;
+let canvases: {
+  worldmap: OffscreenCanvas,
+  minimap: OffscreenCanvas,
+};
+let zoomCallback: Function;
+let worldMapState: MapView;
+let viewport$: BehaviorSubject<Viewport>;
+
+function setupState(
+  worldMapStateBuffer: SharedArrayBuffer,
+) {
+  worldMapState = new WorldMapState(worldMapStateBuffer);
+
+  console.log('worldMapState', worldMapState);
+  console.log(worldMapState.get('hexes').length);
+  console.log(worldMapState.get('hexes')[0]);
+  console.log(worldMapState.toJSON());
+}
+
+function setupApp(
   worldMapCanvas: OffscreenCanvas,
   minimapCanvas: OffscreenCanvas,
   assets: Assets,
+  resolution: number,
 ) {
-  const app = new Application({
+  canvases = {
+    worldmap: worldMapCanvas,
+    minimap: minimapCanvas,
+  };
+  app = new Application({
     width: worldMapCanvas.width,
     height: worldMapCanvas.height,
     antialias: false,
-    resolution: 2,
+    resolution: 1,
     view: worldMapCanvas as any,
   });
 
   const divWheelMock = {
     addEventListener: (type, callback) => {
-
+      zoomCallback = callback;
     },
   }
 
-  const viewport = new Viewport({
+  viewport = new Viewport({
     screenWidth: worldMapCanvas.width,
     screenHeight: worldMapCanvas.height,
-    worldWidth: 0,
-    worldHeight: 0,
+    worldWidth: worldMapState.get('pointWidth'),
+    worldHeight: worldMapState.get('pointHeight'),
     divWheel: divWheelMock as any,
   });
+  viewport.wheel().drag().decelerate();
   app.stage.addChild(viewport as any);
 
-  const sprite = new Sprite(assets.hexMask);
-  sprite.position.set(100, 100);
-  viewport.addChild(sprite as any);
+  viewport.on('moved', event => {
+    viewport$.next(event.viewport);
+  })
+  viewport$ = new BehaviorSubject<Viewport>(viewport);
 
-  // render
-  // const renderer = new WorldMap(app, assets);
-  // renderer.setIcon(world.getHex(5, 5), 'castle');
-  // this.viewport.removeChildren();
-  // this.viewport.worldWidth = renderer.worldWidth;
-  // this.viewport.worldHeight = renderer.worldHeight;
-  // this.viewport.addChild(renderer.chunksLayer);
-  // this.viewport.addChild(renderer.overlayLayer);
-  // this.viewport.addChild(renderer.gridLayer);
-  // this.viewport.addChild(renderer.regionLayer);
-  // this.viewport.addChild(renderer.iconsLayer);
-  // this.viewport.addChild(renderer.debugGraphics);
-  // this.viewport.addChild(renderer.labelContainer);
-
-  /*
-  const testRegion = renderer.regionMap.createRegion({
-    name: 'One',
-    hexes: [
-      world.getHex(5, 5),
-      world.getHex(6, 5),
-    ],
-    // color: Color.fromHSL(random(0, 360), .90, .90),
-    color: new Color([0, 255, 0], 255),
-  });
-  renderer.regionMap.createRegion({
-    name: 'Two',
-    hexes: [
-      world.getHex(6, 6),
-      world.getHex(6, 7),
-    ],
-    color: Color.fromHSL(random(0, 360), .70, .50),
-  });
-
-  this.viewport$.subscribe(viewport => renderer.onViewportMoved(viewport));
-
-  const minimapSize = this.minimapCanvas.getBoundingClientRect();
-  const minimapApp = new PIXI.Application({
-    width: minimapSize.width,
-    height: minimapSize.height,
+  const minimapApp = new Application({
+    width: minimapCanvas.width,
+    height: minimapCanvas.height,
     antialias: false,
-    view: this.minimapCanvas,
+    resolution,
+    view: minimapCanvas as any,
   });
-  const minimap = new WorldMinimap(minimapApp, world, assets, { width: minimapSize.width, height: minimapSize.height }, this.viewport$);
-  minimap.minimapPan.subscribe(point => {
-    this.viewport.moveCenter(point);
-    this.viewport$.next(this.viewport);
-  });
+  minimap = new WorldMinimap(minimapApp, worldMapState, assets, {
+    width: minimapCanvas.width / resolution,
+    height: minimapCanvas.height / resolution,
+  }, viewport$);
 
-  this.viewport.on('clicked', (event) => {
-    const hexPosition = GridFactory.pointToHex(event.world);
-    const hex = world.getHex(hexPosition.x, hexPosition.y);
-    console.log('clicked on hex', hex);
-    console.log({
-      hexRoads: world.hexRoads.get(hex),
-      hexRivers: world.riverHexPairs.get(hex),
-    });
-    const tileSections = assets.hexSectionTileset.getHexTileSections(world, hex);
-    console.log(tileSections.map(tileSection => assets.hexSectionTileset.debugTileSection(tileSection)));
-    console.log('regions', renderer.regionMap.borderTilesetID.get(hex));
-
-    if (hex) {
-      // if (renderer.regionMap.getHexRegion(hex) == testRegion) {
-      //   testRegion.remove(hex);
-      // } else {
-      //   testRegion.add(hex);
-      // }
-      world.setHexRoad(hex, world.getHexNeighbor(hex.x, hex.y, Direction.N), Direction.N);
-    }
+  minimap.minimapPan$.subscribe(point => {
+    viewport.moveCenter(point);
+    viewport$.next(viewport);
   });
 
-  (window as any).moveToHex = (x: number, y: number) => {
-    const hex = world.hexgrid.get({ x, y });
-    const point = hex.toPoint();
-    this.viewport.moveCenter(new PIXI.Point(point.x, point.y));
-  }
-  */
+  const bg = new Sprite(Texture.WHITE);
+  bg.width = worldMapState.get('pointWidth');
+  bg.height = worldMapState.get('pointHeight');
+  bg.position.set(0, 0);
+  bg.tint = 0x333333;
+  viewport.addChild(bg as any);
+  const sprite = new Sprite(assets.hexMask);
+  sprite.position.set(0, 0);
+  viewport.addChild(sprite as any);
 }
 
 type LoaderType = 'png' | 'json';
@@ -165,10 +150,29 @@ class Loader {
   }
 }
 
+export type WorkerPointerEvent = {
+  pointerId: number,
+  pointerType: string,
+  button: number,
+  x: number,
+  y: number,
+};
+
+const createMockPointerEvent = (event: WorkerPointerEvent) => ({
+  data: {
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    global: new Point(event.x, event.y),
+    button: event.button,
+  }
+});
+
 const worker = {
   async init(
     worldMapCanvas: OffscreenCanvas,
     minimapCanvas: OffscreenCanvas,
+    worldMapStateBuffer: SharedArrayBuffer,
+    resolution: number,
   ) {
     const loader = new Loader();
     loader.add('hexMask', 'png', require('../assets/hex-mask.png'))
@@ -177,7 +181,6 @@ const worker = {
     loader.add('gridTexture', 'png', require('../assets/grid.png'))
     loader.add('borderTileset', 'png', require('../assets/borders.png'))
     loader.add('tilesetJson', 'json', tilesetJson as any)
-    console.log(tilesetJson);
     const resources = await loader.load();
     console.log('resources', resources);
     const assets: Assets = {
@@ -191,8 +194,93 @@ const worker = {
       hexSectionTileset: new HexSectionTileset(resources.tilesetJson, resources.tilesetPNG.baseTexture),
     };
     console.log('assets', assets);
-    setup(worldMapCanvas, minimapCanvas, assets);
-  }
+    setupState(worldMapStateBuffer);
+    setupApp(worldMapCanvas, minimapCanvas, assets, resolution);
+  },
+
+  viewportResize(width: number, height: number) {
+    console.log('(worker) window resize', width, height);
+    canvases.worldmap.width = width;
+    canvases.worldmap.height = height;
+    app.renderer.resize(width, height);
+    viewport.resize(width, height);
+  },
+
+  viewportMove(keys: Record<KeyDirection, boolean>) {
+    const SPEED = 100;
+    const pos = new Point(0, 0);
+
+    if (keys.up) {
+      pos.y -= SPEED;
+    }
+    if (keys.down) {
+      pos.y += SPEED;
+    }
+    if (keys.left) {
+      pos.x -= SPEED;
+    }
+    if (keys.right) {
+      pos.x += SPEED;
+    }
+    viewport.animate({
+      time: 100,
+      position: new Point(
+        viewport.center.x + pos.x,
+        viewport.center.y + pos.y,
+      ),
+    })
+  },
+
+  viewportZoom(event: {
+    deltaX: number,
+    deltaY: number,
+    deltaZ: number,
+    deltaMode: number,
+    x: number,
+    y: number,
+  }) {
+    const eventMocked = event as any;
+    eventMocked.preventDefault = () => {};
+    eventMocked.clientX = event.x;
+    eventMocked.clientY = event.y;
+    (viewport.plugins as any).wheel(eventMocked);
+  },
+
+  viewportPointerDown(event: WorkerPointerEvent) {
+    viewport.emit('pointerdown', createMockPointerEvent(event));
+  },
+
+  viewportPointerMove(event: WorkerPointerEvent) {
+    viewport.emit('pointermove', createMockPointerEvent(event));
+  },
+
+  viewportPointerUp(event: WorkerPointerEvent) {
+    viewport.emit('pointerup', createMockPointerEvent(event));
+  },
+
+  viewportPointerCancel(event: WorkerPointerEvent) {
+    viewport.emit('pointercancel', createMockPointerEvent(event));
+  },
+
+  viewportPointerOut(event: WorkerPointerEvent) {
+    viewport.emit('pointerout', createMockPointerEvent(event));
+  },
+
+  minimapPointerUp(event: WorkerPointerEvent) {
+    minimap.pointerUp(event);
+  },
+
+  minimapPointerDown(event: WorkerPointerEvent) {
+    minimap.pointerDown(event);
+  },
+
+  minimapPointerMove(event: WorkerPointerEvent) {
+    minimap.pointerMove(event);
+  },
+
+  minimapPointerOut(event: WorkerPointerEvent) {
+    minimap.pointerOut();
+  },
 };
 expose(worker);
 

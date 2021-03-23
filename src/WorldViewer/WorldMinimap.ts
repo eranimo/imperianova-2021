@@ -4,31 +4,39 @@ import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
 import { terrainColors } from '../game/world/terrain';
-import { Assets } from './WorldViewer.worker';
+import { Assets, WorkerPointerEvent } from './WorldViewer.worker';
 import { Application, Container, Texture, Sprite, Point, ParticleContainer } from './pixi';
+import { WorldMapState, WorldMapStateHex } from './worldMapState';
+import { MapView } from 'structurae';
 
 export class WorldMinimap {
   container: Container;
   map: ParticleContainer;
-  hexSprites: Map<Hex, Sprite>;
-  minimapPan: Subject<Point>;
+  hexSprites: Map<number, Sprite>;
+  minimapPan$: Subject<Point>;
+  isDragging: boolean;
+  getPoint: (event: WorkerPointerEvent) => Point;
 
   constructor(
     app: Application,
-    public world: World,
+    public worldMapState: MapView,
     private assets: Assets,
     private size: Size,
     viewport$: BehaviorSubject<Viewport>,
   ) {
     this.container = new Container();
-    this.map = new ParticleContainer(world.gridSize.width * world.gridSize.height, {
+    const width = worldMapState.get('hexWidth');
+    const height = worldMapState.get('hexHeight');
+    const maxSize = width * height;
+    console.log('maxSize', maxSize);
+    this.map = new ParticleContainer(maxSize, {
       tint: true,
     });
     this.container.addChild(this.map);
     app.stage.addChild(this.container);
     
-    const worldWidth = world.hexgrid.pointWidth();
-    const worldHeight = world.hexgrid.pointHeight();
+    const worldWidth = worldMapState.get('pointWidth');
+    const worldHeight = worldMapState.get('pointHeight');
     const scale = ([x, y]: Coord) => {
       return [
         (x / worldWidth) * size.width,
@@ -37,23 +45,20 @@ export class WorldMinimap {
     }
 
     this.hexSprites = new Map();
-    world.hexgrid.forEach(hex => {
-      const position = scale(this.world.getHexPosition(hex.x, hex.y));
-      const terrainType = this.world.getTerrainForCoord(hex.x, hex.y);
+    worldMapState.get('hexes').forEach((hex: WorldMapStateHex) => {
+      const terrainType = hex.terrainType
       const hexSprite = new Sprite(assets.hexMask);
       hexSprite.tint = terrainColors[terrainType];
-      hexSprite.position.set(
-        position[0],
-        position[1],
-      );
+      const pos = scale([hex.posX, hex.posY]);
+      hexSprite.position.set(pos[0], pos[1]);
       hexSprite.width = (assets.hexMask.width / worldWidth) * size.width;
       hexSprite.height = (assets.hexMask.height / worldHeight) * size.height;
       this.map.addChild(hexSprite);
-      this.hexSprites.set(hex, hexSprite);
+      this.hexSprites.set(hex.index, hexSprite);
     });
 
     const frame = new Sprite(Texture.WHITE);
-    const updateFrame = viewport => {
+    const updateFrame = (viewport: Viewport) => {
       frame.width = (viewport.worldScreenWidth / worldWidth) * size.width;
       frame.height = (viewport.worldScreenHeight / worldHeight) * size.height;
       frame.position.set(
@@ -62,46 +67,53 @@ export class WorldMinimap {
       );
     }
     updateFrame(viewport$.value);
-    // frame.filters = [new GlowFilter({
-    //   color: 0xFFFFFF,
-    //   distance: 2,
-    //   outerStrength: 2,
-    //   innerStrength: 2,
-    //   knockout: true,
-    // })];
+    frame.filters = [new GlowFilter({
+      color: 0xFFFFFF,
+      distance: 2,
+      outerStrength: 2,
+      innerStrength: 2,
+      knockout: true,
+    } as any) as any];
 
     viewport$.subscribe(viewport => {
       updateFrame(viewport);
     });
     this.container.addChild(frame);
 
-    let isDragging = false;
-    this.minimapPan = new Subject();
-    const getPoint = event => new Point(
-      (event.data.global.x / size.width) * worldWidth,
-      (event.data.global.y / size.height) * worldHeight
+    this.isDragging = false;
+    this.minimapPan$ = new Subject();
+    console.log(this);
+    this.getPoint = (event: WorkerPointerEvent) => new Point(
+      (event.x / size.width) * worldWidth,
+      (event.y / size.height) * worldHeight
     );
-    app.renderer.plugins.interaction.on('pointerup', (event) => {
-      isDragging = false;
-      this.minimapPan.next(getPoint(event));
-    });
-    app.renderer.plugins.interaction.on('pointerdown', (event) => {
-      isDragging = true;
-      this.minimapPan.next(getPoint(event));
-    });
-    app.renderer.plugins.interaction.on('pointermove', (event) => {
-      if (isDragging) {
-        this.minimapPan.next(getPoint(event));
-      }
-    });
+  }
+
+  pointerUp(event: WorkerPointerEvent) {
+    this.isDragging = false;
+    this.minimapPan$.next(this.getPoint(event));
+  }
+
+  pointerDown(event: WorkerPointerEvent) {
+    this.isDragging = true;
+    this.minimapPan$.next(this.getPoint(event));
+  }
+
+  pointerMove(event: WorkerPointerEvent) {
+    if (this.isDragging) {
+      this.minimapPan$.next(this.getPoint(event));
+    }
+  }
+
+  pointerOut() {
+    this.isDragging = false;
   }
 
   updateHexColors(
-    getColor: (hex: Hex) => number,
+    getColor: (hex: WorldMapStateHex) => number,
   ) {
-    console.log('update minimap hexes');
-    this.world.hexgrid.forEach(hex => {
-      const hexSprite = this.hexSprites.get(hex);
+    this.worldMapState.get('hexes').forEach((hex: WorldMapStateHex) => {
+      const hexSprite = this.hexSprites.get(hex.index);
       hexSprite.tint = getColor(hex);
     });
   }

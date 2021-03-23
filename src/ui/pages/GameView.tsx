@@ -44,7 +44,7 @@ export const GameContext = React.createContext<Game>(null);
 export const GameView = ({ location }) => {
   const [gameRef, setGame] = useState<Game>();
 
-  let options = defaultOptions;
+  let options = Object.assign({}, defaultOptions);
   if (location.state?.options) {
     options = JSON.parse(location.state.options as any) as GameOptions;
   }
