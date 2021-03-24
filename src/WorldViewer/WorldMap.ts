@@ -1,27 +1,22 @@
+import { Tilemap } from '@pixi/tilemap';
 import cull from 'pixi-cull';
-import { CompositeRectTileLayer } from 'pixi-tilemap';
 import { Viewport } from 'pixi-viewport';
-import { Subject } from 'rxjs';
-import { OFFSET_Y } from '../game/world/hexTile';
-import { terrainColors, TerrainType } from '../game/world/terrain';
-import { calculateCentroidForHexes, Hex, World } from '../game/world/World';
-import { adjacentDirections, Coord, CoordArray, Direction, directionCorners, directionIndexOrder } from '../types';
-import { Color } from '../utils/Color';
+import { TerrainType } from '../game/world/terrain';
+import { Coord, Direction, directionIndexOrder } from '../types';
 import { Grid2D } from '../utils/Grid2D';
-import { ObservableSet } from '../utils/ObservableSet';
-import { Region, WorldMapRegions } from './WorldMapRegions';
-import { colorToNumber } from '../utils';
-import { Game } from '../game/simulation/Game';
 import {
-  Application,
   Container,
-  Sprite,
-  Texture,
-  ParticleContainer,
   Graphics,
+  ParticleContainer,
+  Sprite,
   Text,
-} from './pixi';
+  Texture
+} from 'pixi.js';
+import { WorldMapManager } from './WorldMapManager';
+import { Region, WorldMapRegions } from './WorldMapRegions';
 import { Assets } from './WorldViewer.worker';
+import { logTime } from '../utils';
+import { MapMode } from './mapMode';
 
 const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
@@ -34,13 +29,6 @@ class MapIcon extends Container{
 
   constructor(filename: string) {
     super();
-
-    // const t = Texture.WHITE;
-    // const s = new Sprite(t);
-    // s.width = 64;
-    // s.height = 60;
-    // s.anchor.set(0.5);
-    // this.addChild(s);
 
     import(
       /* webpackMode: "lazy-once" */
@@ -80,67 +68,11 @@ class MapLabel extends Container {
   }
 }
 
-type TileState = {
-  terrainType?: TerrainType,
-  population?: number,
-}
-
-interface MapMode {
-  title: string;
-  init?(tileStates: Map<Hex, TileState>): void;
-  setTile(state: TileState): number;
-}
-
-class TerrainMapMode implements MapMode {
-  title = 'Terrain';
-  setTile(state: TileState) {
-    return terrainColors[state.terrainType]
-  }
-}
-
-class PopulationMapMode implements MapMode {
-  title = 'Population';
-  maxPopulation: number;
-
-  init(tileStates: Map<Hex, TileState>) {
-    this.maxPopulation = 0;
-    let populatedTiles = 0;
-    for (const state of tileStates.values()) {
-      if (state.population !== undefined) {
-        this.maxPopulation += state.population;
-        populatedTiles++;
-      }
-    }
-    this.maxPopulation /= populatedTiles;
-  }
-
-  setTile(state: TileState) {
-    if (state.population) {
-      const v = Math.round((state.population / this.maxPopulation) * 255);
-      return colorToNumber([v, v, v]);
-    }
-    return 0x000000;
-  }
-}
-
-export enum MapModeType {
-  Terrain,
-  Population
-}
-
-export const mapModes: Map<MapModeType, MapMode> = new Map([
-  [MapModeType.Terrain, new TerrainMapMode()],
-  [MapModeType.Population, new PopulationMapMode()],
-]);
-
 export class WorldMap {
-  public world: World;
   public debugGraphics: Graphics;
-  public worldWidth: number;
-  public worldHeight: number;
 
-  chunkTileLayers: Map<string, CompositeRectTileLayer[]>;
-  chunkLayerToChunk: Map<CompositeRectTileLayer, string>;
+  chunkTileLayers: Map<string, Tilemap[]>;
+  chunkLayerToChunk: Map<Tilemap, string>;
   chunkOffset: Map<string, Coord>;
   chunkDirty: Map<string, boolean>;
   hexChunk: Grid2D<string>;
@@ -151,10 +83,12 @@ export class WorldMap {
   overlayLayer: ParticleContainer;
   gridLayer: ParticleContainer;
   regionLayer: ParticleContainer;
+  roadsLayer: ParticleContainer;
+  riversLayer: ParticleContainer;
 
-  hexOverlaySprites: Map<Hex, Sprite>;
-  hexGridSprites: Map<Hex, Sprite>;
-  hexBorderSprites: Map<Hex, Map<Direction, Sprite>>;
+  hexOverlaySprites: Map<number, Sprite>;
+  hexGridSprites: Map<number, Sprite>;
+  hexBorderSprites: Map<number, Map<Direction, Sprite>>;
 
   cull: cull.Simple;
 
@@ -162,26 +96,16 @@ export class WorldMap {
   regionLabels: Map<Region, MapLabel[]>;
   regionMap: WorldMapRegions;
 
-  hexMapIcons: Map<Hex, string>;
-  hexMapIconsSprites: Map<Hex, MapIcon>;
+  hexMapIcons: Map<number, string>;
+  hexMapIconsSprites: Map<number, MapIcon>;
   iconsLayer: Container;
 
-  tileState: Map<Hex, TileState> = new Map();
-  currentMapMode: MapModeType = MapModeType.Terrain
-  game: Game;
-
   constructor(
-    private app: Application,
-    game: Game,
+    public manager: WorldMapManager,
     private assets: Assets
   ) {
     (window as any).worldMap = this;
-    this.game = game;
-    game.context.worldMap = this;
-    this.world = game.world;
     this.debugGraphics = new Graphics();
-    this.worldWidth = this.world.hexgrid.pointWidth();
-    this.worldHeight = this.world.hexgrid.pointHeight();
     this.chunksLayer = new Container();
 
     this.chunkDirty = new Map();
@@ -191,7 +115,7 @@ export class WorldMap {
     this.chunkTileLayers = new Map();
     this.chunkDrawTimes = new Map();
     this.regionLabels = new Map();
-    const { width, height } = game.world.gridSize;
+    const { width, height } = manager.mapSize;
     this.hexChunk = new Grid2D(width, height);
     this.chunkHexes = new Map();
     this.labelContainer = new Container();
@@ -202,8 +126,8 @@ export class WorldMap {
     this.overlayLayer = new ParticleContainer(width * height, { tint: true });
     this.gridLayer = new ParticleContainer(width * height, { tint: true });
     this.regionLayer = new ParticleContainer(width * height, { tint: true });
-
-    this.regionMap = new WorldMapRegions(this.world);
+    this.roadsLayer = new ParticleContainer(width * height, { tint: true });
+    this.riversLayer = new ParticleContainer(width * height, { tint: true });
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x += 2) {
@@ -229,7 +153,29 @@ export class WorldMap {
 
     this.cull = new cull.Simple();
 
-    this.onNewWorld(this.world);
+    this.renderDebug();
+    this.render();
+
+    const updateMap = () => {
+      console.log('update map');
+      for (const [hex, overlaySprite] of this.hexOverlaySprites) {
+        const state = manager.hexList[hex];
+        overlaySprite.tint = manager.mapMode$.value.setTile(state);
+      }
+    }
+
+    manager.dirty$.subscribe(updateMap);
+    manager.dirtyHex$.subscribe(hexIndex => {
+      const overlaySprite = this.hexOverlaySprites.get(hexIndex);
+      const state = manager.hexList[hexIndex];
+      overlaySprite.tint = manager.mapMode$.value.setTile(state);
+    });
+
+    manager.mapMode$.subscribe(mapMode => {
+      this.riversLayer.visible = mapMode.displayRivers;
+      updateMap();
+    });
+
     this.cull.addList(this.chunksLayer.children as any, true);
     this.iconsLayer = new Container();
     this.hexMapIcons = new Map();
@@ -237,95 +183,74 @@ export class WorldMap {
 
     // setup events
     this.chunksLayer.visible = false;
-    document.addEventListener('keyup', event => {
-      if (event.key === 'd') {
-        this.debugGraphics.visible = !this.debugGraphics.visible;
-      } else if (event.key === 'o') {
-        this.overlayLayer.visible = !this.overlayLayer.visible;
-        this.chunksLayer.visible = !this.overlayLayer.visible;
-      } else if (event.key === 'g') {
-        this.gridLayer.visible = !this.gridLayer.visible;
-      }
-    });
+    // document.addEventListener('keyup', event => {
+    //   if (event.key === 'd') {
+    //     this.debugGraphics.visible = !this.debugGraphics.visible;
+    //   } else if (event.key === 'o') {
+    //     this.overlayLayer.visible = !this.overlayLayer.visible;
+    //     this.chunksLayer.visible = !this.overlayLayer.visible;
+    //   } else if (event.key === 'g') {
+    //     this.gridLayer.visible = !this.gridLayer.visible;
+    //   }
+    // });
 
-    const updateRegionLabel = (region: Region) => {
-      const labelPositions = region.calculateLabels();
-      if (this.regionLabels.has(region)) {
-        const labels = this.regionLabels.get(region);
-        for (const label of labels) {
-          this.labelContainer.removeChild(label);
-        }
-      }
-      this.regionLabels.set(region, labelPositions.map(([x, y]) => {
-        const label = new MapLabel(region.name, 16)
-        label.position.set(x, y);
-        this.labelContainer.addChild(label);
-        return label;
-      }));
-    }
+    // const updateRegionLabel = (region: Region) => {
+    //   const labelPositions = region.calculateLabels();
+    //   if (this.regionLabels.has(region)) {
+    //     const labels = this.regionLabels.get(region);
+    //     for (const label of labels) {
+    //       this.labelContainer.removeChild(label);
+    //     }
+    //   }
+    //   this.regionLabels.set(region, labelPositions.map(([x, y]) => {
+    //     const label = new MapLabel(region.name, 16)
+    //     label.position.set(x, y);
+    //     this.labelContainer.addChild(label);
+    //     return label;
+    //   }));
+    // }
 
-    const updateRegionMap = (region: Region) => {
-      const chunks = new Set<string>();
-      for (const hex of region.hexes) {
-        const chunk = this.hexChunk.get(hex.x, hex.y);
-        chunks.add(chunk);
-      }
-      for (const chunk of chunks) {
-        this.drawChunk(chunk);
-      }
-    }
+    // const updateRegionMap = (region: Region) => {
+    //   const chunks = new Set<string>();
+    //   for (const hex of region.hexes) {
+    //     const chunk = this.hexChunk.get(hex.x, hex.y);
+    //     chunks.add(chunk);
+    //   }
+    //   for (const chunk of chunks) {
+    //     this.drawChunk(chunk);
+    //   }
+    // }
   
-    const removeRegionLabel = (region: Region) => {
-      const labels = this.regionLabels.get(region)
-      this.regionLabels.delete(region);
-      for (const label of labels) {
-        this.labelContainer.removeChild(label);
-      }
-    }
+    // const removeRegionLabel = (region: Region) => {
+    //   const labels = this.regionLabels.get(region)
+    //   this.regionLabels.delete(region);
+    //   for (const label of labels) {
+    //     this.labelContainer.removeChild(label);
+    //   }
+    // }
 
-    this.regionMap.regions.added$.subscribe(region => {
-      region.update();
-      updateRegionLabel(region);
-    });
-    this.regionMap.regionHexAdded$.subscribe(([region]) => {
-      console.log('region hex added', region);
-      region.update();
-      updateRegionLabel(region);
-      updateRegionMap(region);
-    });
-    this.regionMap.regionHexRemoved$.subscribe(([region, hex]) => {
-      console.log('region hex removed', region);
-      region.update();
-      updateRegionLabel(region);
-      updateRegionMap(region);
-      const chunk = this.hexChunk.get(hex.x, hex.y);
-      this.drawChunk(chunk);
-    });
-    this.regionMap.regions.deleted$.subscribe(region => removeRegionLabel(region));
+    // this.regionMap.regions.added$.subscribe(region => {
+    //   region.update();
+    //   updateRegionLabel(region);
+    // });
+    // this.regionMap.regionHexAdded$.subscribe(([region]) => {
+    //   console.log('region hex added', region);
+    //   region.update();
+    //   updateRegionLabel(region);
+    //   updateRegionMap(region);
+    // });
+    // this.regionMap.regionHexRemoved$.subscribe(([region, hex]) => {
+    //   console.log('region hex removed', region);
+    //   region.update();
+    //   updateRegionLabel(region);
+    //   updateRegionMap(region);
+    //   const chunk = this.hexChunk.get(hex.x, hex.y);
+    //   this.drawChunk(chunk);
+    // });
+    // this.regionMap.regions.deleted$.subscribe(region => removeRegionLabel(region));
   }
 
-  setMapMode(mapMode: MapModeType) {
-    this.currentMapMode = mapMode;
-    const mapModeInst = mapModes.get(mapMode);
-    if (!mapModeInst) {
-      throw new Error(`Map mode not found: ${mapMode}`);
-    }
-    if (mapModeInst.init) {
-      mapModeInst.init(this.tileState);
-    }
-    for (const [hex, overlaySprite] of this.hexOverlaySprites) {
-      overlaySprite.tint = mapModeInst.setTile(this.tileState.get(hex));
-    }
-  }
-
-  setTileState<K extends keyof TileState>(hex: Hex, key: K, value: TileState[K]) {
-    if (!this.tileState.has(hex)) {
-      this.tileState.set(hex, {});
-    }
-    this.tileState.get(hex)[key] = value;
-  }
-
-  setIcon(hex: Hex, icon: string) {
+  setIcon(hex: number, icon: string) {
     this.hexMapIcons.set(hex, icon);
   }
 
@@ -338,27 +263,16 @@ export class WorldMap {
     this.cull.cull(bounds);
     const visibleChunkLayers = this.cull.query(bounds);
 
+    // console.log(this.cull.stats());
+
     for (const tilemapLayer of visibleChunkLayers) {
-      if (tilemapLayer instanceof CompositeRectTileLayer) {
+      if (tilemapLayer instanceof Tilemap) {
         const chunk = this.chunkLayerToChunk.get(tilemapLayer);
         if (this.chunkDirty.get(chunk)) {
           this.drawChunk(chunk);
         }
       }
     }
-  }
-
-  onNewWorld(world: World) {
-    this.world = world;
-
-    this.renderDebug();
-    this.render();
-    console.log('World', world);
-    console.log('WorldMap', this);
-    for (const hex of world.hexgrid) {
-      this.setTileState(hex, 'terrainType', world.getTerrain(hex));
-    }
-    this.setMapMode(this.currentMapMode);
   }
 
   private getChunkForCoordinate(x: number, y: number) {
@@ -374,92 +288,116 @@ export class WorldMap {
     const hexes = this.chunkHexes.get(chunkKey);
     const [minX, minY] = this.chunkOffset.get(chunkKey);
     hexes.forEach((pos, index) => {
-      const terrainType = this.world.getTerrainForCoord(pos.x, pos.y);
+      const hex = this.manager.getHexFromCoord(pos.x, pos.y);
+      const hexIndex = this.manager.hexCoordForIndex.get(pos.x, pos.y);
+      const terrainType = hex.terrainType;
       if (terrainType === TerrainType.NONE) return;
-      const hex = this.world.getHex(pos.x, pos.y);
-      const tileSections = this.assets.hexSectionTileset.getHexTileSections(this.world, hex);
+      const x = hex.posX;
+      const y = hex.posY;
+      // const tileSections = this.assets.hexSectionTileset.getHexTileSections(this.world, hex);
 
-      const textures = tileSections.map(tileSection => {
-        const variants = this.assets.hexSectionTileset.getTexturesForTileSection(tileSection);
-        if (variants.length === 0) {
-          return null;
-        }
-        // TODO: pick random variant?
-        return variants[0];
-      });
-      const [ x, y ] = this.world.getHexPosition(hex.x, hex.y);
-      const tx = (x - minX);
-      const ty = (y - OFFSET_Y - minY);
-      for (const texture of textures) {
-        if (texture) {
-          terrainLayer.addFrame(texture, tx, ty);
-        }
-      }
+      // const textures = tileSections.map(tileSection => {
+      //   const variants = this.assets.hexSectionTileset.getTexturesForTileSection(tileSection);
+      //   if (variants.length === 0) {
+      //     return null;
+      //   }
+      //   // TODO: pick random variant?
+      //   return variants[0];
+      // });
+      // const tx = (x - minX);
+      // const ty = (y - OFFSET_Y - minY);
+      // for (const texture of textures) {
+      //   if (texture) {
+      //     terrainLayer.addFrame(texture, tx, ty);
+      //   }
+      // }
 
       // overlay
-      if (!this.hexOverlaySprites.has(hex)) {
+      if (!this.hexOverlaySprites.has(hexIndex)) {
         const overlaySprite = new Sprite(this.assets.hexMask);
-        overlaySprite.tint = mapModes.get(this.currentMapMode).setTile(this.tileState.get(hex));
+        overlaySprite.tint = this.manager.mapMode$.value.setTile(hex);
         overlaySprite.position.set(x, y);
         overlaySprite.width = this.assets.hexMask.width;
         overlaySprite.height = this.assets.hexMask.height;
-        this.cull.add(overlaySprite as any, true);
+        // this.cull.add(overlaySprite as any, true);
         this.overlayLayer.addChild(overlaySprite);
-        this.hexOverlaySprites.set(hex, overlaySprite);
+        this.hexOverlaySprites.set(hexIndex, overlaySprite);
       }
 
-      if (!this.hexGridSprites.has(hex)) {
+      if (!this.hexGridSprites.has(hexIndex)) {
         const gridSprite = new Sprite(this.assets.gridTexture);
         gridSprite.alpha = 0.25;
         gridSprite.position.set(x, y);
         gridSprite.width = this.assets.hexMask.width;
         gridSprite.height = this.assets.hexMask.height;
-        this.cull.add(gridSprite as any, true);
+        // this.cull.add(gridSprite as any, true);
         this.gridLayer.addChild(gridSprite);
-        this.hexGridSprites.set(hex, gridSprite);
+        this.hexGridSprites.set(hexIndex, gridSprite);
       }
 
-      if (this.hexBorderSprites.has(hex)) {
-        for (const [dir, sprite] of this.hexBorderSprites.get(hex)) {
+      for (const dir of directionIndexOrder) {
+        if (hex.river[dir] === 1) {
+          const riverSprite = new Sprite(this.assets.hexTemplate.getTile(dir));
+          riverSprite.tint = DEBUG_RIVER_COLOR;
+          riverSprite.position.set(x, y);
+          riverSprite.width = this.assets.hexMask.width;
+          riverSprite.height = this.assets.hexMask.height;
+          this.riversLayer.addChild(riverSprite);
+        }
+      }
+
+      for (const dir of directionIndexOrder) {
+        if (hex.road[dir] === 1) {
+          const roadSprite = new Sprite(this.assets.hexTemplate.getTile(6 + dir));
+          roadSprite.tint = DEBUG_ROAD_COLOR;
+          roadSprite.position.set(x, y);
+          roadSprite.width = this.assets.hexMask.width;
+          roadSprite.height = this.assets.hexMask.height;
+          this.riversLayer.addChild(roadSprite);
+        }
+      }
+
+      if (this.hexBorderSprites.has(hexIndex)) {
+        for (const [dir, sprite] of this.hexBorderSprites.get(hexIndex)) {
           sprite.destroy();
-          this.cull.remove(sprite as any);
+          // this.cull.remove(sprite as any);
           this.regionLayer.removeChild(sprite);
-          this.hexBorderSprites.get(hex).delete(dir);
+          this.hexBorderSprites.get(hexIndex).delete(dir);
         }
       }
 
-      if (this.regionMap.hexHasRegion(hex)) {
-        const region = this.regionMap.getHexRegion(hex);
-        const tileIDMap = this.regionMap.borderTilesetID.get(hex);
-        if (tileIDMap === undefined) {
-          throw new Error('Tile border map not calculated');
-        }
-        const hexBorderSprites = new Map<Direction, Sprite>();
-        for (const dir of directionIndexOrder) {
-          const tileID = tileIDMap.get(dir);
-          if (tileID !== undefined) {
-            const borderSprite = new Sprite(this.assets.borderTileset.getTile(tileID));
-            borderSprite.position.set(x, y);
-            borderSprite.width = this.assets.hexMask.width;
-            borderSprite.height = this.assets.hexMask.height;
-            this.cull.add(borderSprite as any, true);
-            this.regionLayer.addChild(borderSprite);
-            borderSprite.tint = region.color.toNumber();
-            hexBorderSprites.set(dir, borderSprite);
-          } else if (this.hexBorderSprites.has(hex)){
-            const borderSprite = this.hexBorderSprites.get(hex).get(dir);
-            if (borderSprite) {
-              borderSprite.destroy();
-              this.regionLayer.removeChild(borderSprite);
-            }
-          }
-        }
-        this.hexBorderSprites.set(hex, hexBorderSprites);
-      }
+      // if (this.regionMap.hexHasRegion(hexIndex)) {
+      //   const region = this.regionMap.getHexRegion(hexIndex);
+      //   const tileIDMap = this.regionMap.borderTilesetID.get(hexIndex);
+      //   if (tileIDMap === undefined) {
+      //     throw new Error('Tile border map not calculated');
+      //   }
+      //   const hexBorderSprites = new Map<Direction, Sprite>();
+      //   for (const dir of directionIndexOrder) {
+      //     const tileID = tileIDMap.get(dir);
+      //     if (tileID !== undefined) {
+      //       const borderSprite = new Sprite(this.assets.borderTileset.getTile(tileID));
+      //       borderSprite.position.set(x, y);
+      //       borderSprite.width = this.assets.hexMask.width;
+      //       borderSprite.height = this.assets.hexMask.height;
+      //       this.cull.add(borderSprite as any, true);
+      //       this.regionLayer.addChild(borderSprite);
+      //       borderSprite.tint = region.color.toNumber();
+      //       hexBorderSprites.set(dir, borderSprite);
+      //     } else if (this.hexBorderSprites.has(hexIndex)){
+      //       const borderSprite = this.hexBorderSprites.get(hexIndex).get(dir);
+      //       if (borderSprite) {
+      //         borderSprite.destroy();
+      //         this.regionLayer.removeChild(borderSprite);
+      //       }
+      //     }
+      //   }
+      //   this.hexBorderSprites.set(hexIndex, hexBorderSprites);
+      // }
 
       // icons
-      if (this.hexMapIcons.has(hex)) {
-        const iconName = this.hexMapIcons.get(hex);
+      if (this.hexMapIcons.has(hexIndex)) {
+        const iconName = this.hexMapIcons.get(hexIndex);
         const mapIcon = new MapIcon(iconName);
         mapIcon.width = this.assets.hexMask.width;
         mapIcon.height = this.assets.hexMask.height;
@@ -467,8 +405,8 @@ export class WorldMap {
           x + (this.assets.hexMask.width / 2),
           y + (this.assets.hexMask.height / 2),
         );
-        this.cull.add(mapIcon as any, true);
-        this.hexMapIconsSprites.set(hex, mapIcon);
+        // this.cull.add(mapIcon as any, true);
+        this.hexMapIconsSprites.set(hexIndex, mapIcon);
         this.iconsLayer.addChild(mapIcon);
       }
     });
@@ -486,15 +424,13 @@ export class WorldMap {
     let minX = Infinity;
     let minY = Infinity;
     for (const pos of hexes) {
-      const [ x, y ] = this.world.getHexPosition(pos.x, pos.y);
-      const hex = this.world.getHex(pos.x, pos.y);
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      hexPosititions.push([x, y]);
+      const hex = this.manager.getHexFromCoord(pos.x, pos.y);
+      if (hex.posX < minX) minX = hex.posX;
+      if (hex.posY < minY) minY = hex.posY;
+      hexPosititions.push([hex.posX, hex.posY]);
     }
     this.chunkOffset.set(chunkKey, [minX, minY]);
     this.chunkDirty.set(chunkKey, true);
-    // TODO: why casting is required
     (terrainLayer as any).position.set((minX), (minY));
   }
 
@@ -503,8 +439,8 @@ export class WorldMap {
     console.time('draw chunks');
     console.log(`Drawing ${this.chunkHexes.size} chunks`);
     for (const chunkKey of this.chunkHexes.keys()) {
-      const terrainLayer = new CompositeRectTileLayer(0, [
-        new Texture(this.assets.hexSectionTileset.tilesetTexture),
+      const terrainLayer = new Tilemap([
+        this.assets.hexSectionTileset.tilesetTexture,
       ]);
       this.chunkTileLayers.set(chunkKey, [terrainLayer]);
       this.chunksLayer.addChild(terrainLayer as any);
@@ -517,37 +453,36 @@ export class WorldMap {
 
   renderDebug() {
     // debug
-    this.world.hexgrid.forEach(hex => {
-      const point = hex.toPoint()
-      const corners = hex.round().corners().map(corner => corner.add(point));
-      const center = {
-        x: hex.center().x + point.x,
-        y: hex.center().y + point.y,
-      };
-      const [firstCorner, ...otherCorners] = corners
+    // for (const hex of this.manager.hexes()) {
+    //   const corners = hex.round().corners().map(corner => corner.add(point));
+    //   const center = {
+    //     x: (64 / 2) + hex.posX,
+    //     y: (60 / 2) + hex.posY,
+    //   };
+    //   const [firstCorner, ...otherCorners] = corners
 
-      // rivers
-      if (this.world.hexRiverEdges.containsKey(hex)) {
-        this.debugGraphics.lineStyle(5, DEBUG_RIVER_COLOR);
-        for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
-          this.debugGraphics.moveTo(p1.x, p1.y);
-          this.debugGraphics.lineTo(p2.x, p2.y);
-        }
-      }
+    //   // rivers
+    //   if (this.world.hexRiverEdges.containsKey(hex)) {
+    //     this.debugGraphics.lineStyle(5, DEBUG_RIVER_COLOR);
+    //     for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
+    //       this.debugGraphics.moveTo(p1.x, p1.y);
+    //       this.debugGraphics.lineTo(p2.x, p2.y);
+    //     }
+    //   }
 
-      // roads
-      if (this.world.hexRoads.has(hex)) {
-        this.debugGraphics.lineStyle(3, DEBUG_ROAD_COLOR);
-        for (const direction of directionIndexOrder) {
-          if (this.world.hexRoads.get(hex).get(direction)) {
-            const [c1, c2] = directionCorners[direction];
-            const x = (corners[c1].x + corners[c2].x) / 2;
-            const y = (corners[c1].y + corners[c2].y) / 2;
-            this.debugGraphics.moveTo(center.x, center.y);
-            this.debugGraphics.lineTo(x, y);
-          }
-        }
-      }
-    });
+    //   // roads
+    //   if (this.world.hexRoads.has(hex)) {
+    //     this.debugGraphics.lineStyle(3, DEBUG_ROAD_COLOR);
+    //     for (const direction of directionIndexOrder) {
+    //       if (this.world.hexRoads.get(hex).get(direction)) {
+    //         const [c1, c2] = directionCorners[direction];
+    //         const x = (corners[c1].x + corners[c2].x) / 2;
+    //         const y = (corners[c1].y + corners[c2].y) / 2;
+    //         this.debugGraphics.moveTo(center.x, center.y);
+    //         this.debugGraphics.lineTo(x, y);
+    //       }
+    //     }
+    //   }
+    // }
   }
 }

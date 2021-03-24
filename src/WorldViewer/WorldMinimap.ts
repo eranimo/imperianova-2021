@@ -1,13 +1,12 @@
-import { World, Hex } from '../game/world/World';
-import { ColorArray, Size, Coord, CornerMap } from '../types';
-import { GlowFilter, OutlineFilter } from 'pixi-filters';
-import { Subject, BehaviorSubject } from 'rxjs';
 import { Viewport } from 'pixi-viewport';
-import { terrainColors } from '../game/world/terrain';
-import { Assets, WorkerPointerEvent } from './WorldViewer.worker';
-import { Application, Container, Texture, Sprite, Point, ParticleContainer } from './pixi';
-import { WorldMapState, WorldMapStateHex } from './worldMapState';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { MapView } from 'structurae';
+import { terrainColors } from '../game/world/terrain';
+import { Coord, Size } from '../types';
+import { Application, Container, ParticleContainer, Point, Sprite, Texture } from 'pixi.js';
+import { WorldMapStateHex } from './worldMapState';
+import { Assets, WorkerPointerEvent } from './WorldViewer.worker';
+import { GlowFilter } from 'pixi-filters';
 
 export class WorldMinimap {
   container: Container;

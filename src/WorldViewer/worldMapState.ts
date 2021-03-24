@@ -5,11 +5,14 @@ import { Direction } from '../types';
 export type WorldMapStateHex = {
   index: number,
   terrainType: number,
+  population: number,
   coordX: number,
   coordY: number,
   posX: number,
   posY: number,
-  regionID: number,
+  regionID?: string,
+  river: Record<Direction, number>;
+  road: Record<Direction, number>;
 };
 
 export const WorldMapState = MapViewMixin({
@@ -28,27 +31,36 @@ export const WorldMapState = MapViewMixin({
         properties: {
           index: { type: 'integer', btype: 'uint32' },
           terrainType: { type: 'integer', btype: 'uint32' },
-          coordX: { type: 'integer', btype: 'uint8' },
-          coordY: { type: 'integer', btype: 'uint8' },
+          population: { type: 'integer', btype: 'uint32' },
+          coordX: { type: 'integer', btype: 'uint32' },
+          coordY: { type: 'integer', btype: 'uint32' },
           posX: { type: 'integer', btype: 'uint32' },
           posY: { type: 'integer', btype: 'uint32' },
           regionID: { type: 'string', default: '', maxLength: 36 },
-          // river: {
-          //   [Direction.SE]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.NE]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.N]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.NW]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.SW]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.S]: { type: 'integer', btype: 'uint8', default: 0 },
-          // },
-          // road: {
-          //   [Direction.SE]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.NE]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.N]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.NW]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.SW]: { type: 'integer', btype: 'uint8', default: 0 },
-          //   [Direction.S]: { type: 'integer', btype: 'uint8', default: 0 },
-          // }
+          river: {
+            $id: 'HexRiver',
+            type: 'object',
+            properties: {
+              [Direction.SE]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.NE]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.N]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.NW]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.SW]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.S]: { type: 'integer', btype: 'uint8', default: 0 },
+            },
+          },
+          road: {
+            $id: 'HexRoad',
+            type: 'object',
+            properties: {
+              [Direction.SE]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.NE]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.N]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.NW]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.SW]: { type: 'integer', btype: 'uint8', default: 0 },
+              [Direction.S]: { type: 'integer', btype: 'uint8', default: 0 },
+            },
+          }
         }
       }
     },

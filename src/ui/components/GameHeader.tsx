@@ -1,8 +1,8 @@
-import { Alert, Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Button, Flex, FormControl, FormLabel, Heading, HStack, IconButton, Input, MenuItem, MenuList, Modal, ModalBody, ModalContent, ModalOverlay, Stack, Tooltip, Wrap } from '@chakra-ui/react';
+import { Alert, Box, Breadcrumb, BreadcrumbItem, BreadcrumbLink, Button, Flex, FormControl, FormLabel, Heading, HStack, IconButton, Input, Menu, MenuButton, MenuItem, MenuItemOption, MenuList, MenuOptionGroup, Modal, ModalBody, ModalContent, ModalOverlay, Stack, Tooltip, Wrap } from '@chakra-ui/react';
 import { World as ECS, Entity, System, Component } from 'ape-ecs';
 import { values } from 'lodash';
 import React, { useContext, useEffect, useState } from 'react';
-import { BiMenu, BiPause, BiPlay, BiRefresh } from 'react-icons/bi';
+import { BiChevronDown, BiMenu, BiPause, BiPlay, BiRefresh } from 'react-icons/bi';
 import { useAsync, useObservable } from 'react-use';
 import { Game } from '../../game/simulation/Game';
 import { observer } from 'mobx-react-lite';
@@ -11,14 +11,15 @@ import { Link } from 'react-router-dom';
 import { GameStore } from '../../game/simulation/GameStore';
 import { LoadGameList, SaveGameList } from './SavedGameList';
 import { GameContext } from '../pages/GameView';
+import { mapModes, MapModeType } from '../../WorldViewer/mapMode';
 
 const DateDisplay = observer<{
   game: Game
 }>(({ game }) => {
-  const [date] = useState(() => game.gameInfo.getComponent(GameInfoComponent).value);
+  const [gameinfo] = useState(() => game.gameInfo.getComponent(GameInfoComponent).value);
   return (
     <>
-      {date.date}
+      {gameinfo.date}
     </>
   );
 });
@@ -135,6 +136,7 @@ export const GameHeader = () => {
   const game = useContext(GameContext);
   const [menuOpen, setMenuOpen] = useState(false);
   const isPlaying = useObservable(game.isPlaying$, game.isPlaying$.value);
+  const currentMapMode = useObservable(game.mapMode$, game.mapMode$.value);
   return (
     <Flex
       bgColor="gray.900"
@@ -144,51 +146,83 @@ export const GameHeader = () => {
       top={0}
       zIndex={100}
     >
-      <HStack>
-        <Modal
-          isOpen={menuOpen}
-          onClose={() => setMenuOpen(false)}
-        >
-          <ModalOverlay />
-          <ModalContent p={5}>
-            <GameMenu game={game} closeMenu={() => setMenuOpen(false)} />
-          </ModalContent>
-        </Modal>
-        <IconButton
-          aria-label="game menu"
-          size="sm"
-          icon={<BiMenu />}
-          onClick={() => {
-            setMenuOpen(true);
-            game.pause();
-          }}
-        />
-        {isPlaying
-          ? <IconButton
-            onClick={() => game.pause()}
-            size="sm"
-            aria-label="pause"
-            icon={<BiPause size="1.2rem" />}
-          />
-          : <IconButton
-            onClick={() => game.play()}
-            size="sm"
-            aria-label="play"
-            icon={<BiPlay size="1.2rem" />}
-          />
-        }
-        <DateDisplay game={game} />
-        {/* <Tooltip
-          label="Reload map"
-        >
+      <Flex width="full" justifyContent="space-between">
+        <HStack>
+          <Modal
+            isOpen={menuOpen}
+            onClose={() => setMenuOpen(false)}
+          >
+            <ModalOverlay />
+            <ModalContent p={5}>
+              <GameMenu game={game} closeMenu={() => setMenuOpen(false)} />
+            </ModalContent>
+          </Modal>
           <IconButton
-            onClick={regenerate}
+            aria-label="game menu"
             size="sm"
-            aria-label="refresh"
-            icon={<BiRefresh size="1.2rem" />}
+            icon={<BiMenu />}
+            onClick={() => {
+              setMenuOpen(true);
+              game.pause();
+            }}
           />
-        </Tooltip> */}
-      </HStack>
+          {isPlaying
+            ? <IconButton
+              onClick={() => game.pause()}
+              size="sm"
+              aria-label="pause"
+              icon={<BiPause size="1.2rem" />}
+            />
+            : <IconButton
+              onClick={() => game.play()}
+              size="sm"
+              aria-label="play"
+              icon={<BiPlay size="1.2rem" />}
+            />
+          }
+          <DateDisplay game={game} />
+          {/* <Tooltip
+            label="Reload map"
+          >
+            <IconButton
+              onClick={regenerate}
+              size="sm"
+              aria-label="refresh"
+              icon={<BiRefresh size="1.2rem" />}
+            />
+          </Tooltip> */}
+        </HStack>
+        <HStack>
+          <Menu>
+            <MenuButton
+              size="sm"
+              as={Button}
+              rightIcon={<BiChevronDown />}
+            >
+              {mapModes.get(currentMapMode).title}
+            </MenuButton>
+            <MenuList>
+              <MenuOptionGroup
+                title="Map Mode"
+                type="radio"
+                onChange={mapModeValue => {
+                  game.changeMapMode(parseInt(mapModeValue as string, 10) as MapModeType);
+                }}
+                value={(currentMapMode as number).toString()}
+              >
+                {Array.from(mapModes.entries()).map(([mapModeType, mapMode]) => (
+                  <MenuItemOption
+                    key={mapMode.title}
+                    value={(mapModeType as number).toString()}
+                  >
+                    {mapMode.title}
+                  </MenuItemOption>
+                ))}
+              </MenuOptionGroup>
+            </MenuList>
+          </Menu>
+        </HStack>
+      </Flex>
     </Flex>
   )
 }

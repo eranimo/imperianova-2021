@@ -6,9 +6,11 @@ import WorldViewerWorker from 'worker-loader!./WorldViewer.worker.ts';
 import { GameContext } from '../ui/pages/GameView';
 import type { WorldViewerClient } from './WorldViewer.worker';
 import { Game } from '../game/simulation/Game';
-import { WorldMapState } from './worldMapState';
+import { WorldMapState, WorldMapStateHex } from './worldMapState';
 import { useEvent, useWindowSize } from 'react-use';
 import { KeyDirection } from './WorldViewer.worker';
+import { Direction, directionIndexOrder } from '../types';
+import { MapModeType } from './mapMode';
 
 
 const createWorkerPointerEvent = (event: PointerEvent) => ({
@@ -29,7 +31,7 @@ const createWorkerZoomEvent = (e: WheelEvent) => ({
 });
 
 
-class WorldMapManager {
+class WorldViewerWorkerClient {
   viewport$: BehaviorSubject<Viewport>;
 
   constructor(
@@ -50,20 +52,46 @@ class WorldMapManager {
 
     // create world map state
     console.log('Game', game);
-    const hexes = [];
+    const hexes: WorldMapStateHex[] = [];
     for (const hex of game.world.hexgrid) {
-      const river = {};
-      const road = {};
+      const river = {
+        [Direction.SE]: 0,
+        [Direction.NE]: 0,
+        [Direction.N]: 0,
+        [Direction.NW]: 0,
+        [Direction.SW]: 0,
+        [Direction.S]: 0,
+      };
+      if (game.world.riverHexPairs.has(hex)) {
+        for (const dir of directionIndexOrder) {
+          const neighbor = game.world.getHexNeighbor(hex.x, hex.y, dir);
+          river[dir] = Number(game.world.riverHexPairs.get(hex).has(neighbor));
+        }
+      }
+      const road = {
+        [Direction.SE]: 0,
+        [Direction.NE]: 0,
+        [Direction.N]: 0,
+        [Direction.NW]: 0,
+        [Direction.SW]: 0,
+        [Direction.S]: 0,
+      };
+      if (game.world.hexRoads.has(hex)) {
+        for (const dir of directionIndexOrder) {
+          road[dir] = Number(game.world.hexRoads.get(hex).has(dir));
+        }
+      }
       const pos = game.world.getHexPosition(hex.x, hex.y);
       hexes.push({
         index: hex.index,
         terrainType: game.world.getTerrain(hex),
+        population: 0,
         coordX: hex.x,
         coordY: hex.y,
         posX: pos[0],
         posY: pos[1],
-        // river,
-        // road,
+        river: river as any,
+        road: road as any,
       })
     }
     const worldMapStateRaw = {
@@ -85,7 +113,7 @@ class WorldMapManager {
       window.devicePixelRatio,
     );
 
-    return new WorldMapManager(game, worker);
+    return new WorldViewerWorkerClient(game, worker);
   }
 
   viewportMove(keys: Record<KeyDirection, boolean>) {
@@ -136,6 +164,10 @@ class WorldMapManager {
   minimapPointerOut(event: PointerEvent) {
     this.worker.minimapPointerOut(createWorkerPointerEvent(event));
   }
+
+  changeMapMode(mapModeType: MapModeType) {
+    this.worker.changeMapMode(mapModeType);
+  }
 }
 
 export const WorldViewer = () => {
@@ -144,14 +176,18 @@ export const WorldViewer = () => {
   const minimapRef = useRef<HTMLCanvasElement>();
   const [isLoading, setLoading] = useState(true);
 
-  const managerRef = useRef<WorldMapManager>();
+  const managerRef = useRef<WorldViewerWorkerClient>();
 
   useEffect(() => {
     console.log('setup world manager');
     setLoading(true);
-    WorldMapManager.create(game, worldMapRef.current, minimapRef.current).then((manager) => {
+    WorldViewerWorkerClient.create(game, worldMapRef.current, minimapRef.current).then((manager) => {
       managerRef.current = manager;
       setLoading(false);
+
+      game.mapMode$.subscribe((mapModeType) => {
+        managerRef.current.changeMapMode(mapModeType);
+      });
 
       // viewport events
       worldMapRef.current.addEventListener('wheel', (e) => {

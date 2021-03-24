@@ -5,16 +5,20 @@ import { Tileset } from './Tileset';
 import { HexSectionTileset } from './HexSectionTileset';
 import { decode } from 'fast-png';
 import tilesetJson from '../assets/tileset.json';
-import { Application, Sprite, Texture, Point } from './pixi';
+import { Application, Sprite, Texture, Point, Container } from 'pixi.js';
 import { WorldMapState } from './worldMapState';
 import { WorldMinimap } from './WorldMinimap';
 import { MapView } from 'structurae';
 import { BehaviorSubject } from 'rxjs';
+import { WorldMapManager } from './WorldMapManager';
+import { WorldMap } from './WorldMap';
+import { MapModeType } from './mapMode';
 
 export type Assets = {
   borderTileset: Tileset,
   gridTexture: Texture,
   hexMask: Texture,
+  hexTemplate: Tileset,
   hexSectionTileset: HexSectionTileset,
 };
 
@@ -26,8 +30,10 @@ interface IAssetContext {
 export type KeyDirection = 'up' | 'down' | 'left' | 'right';
 
 let app: Application;
+let worldMapManager: WorldMapManager;
+let worldMap: WorldMap;
 let minimap: WorldMinimap;
-let viewport: Viewport;
+let viewport: Viewport & Container;
 let canvases: {
   worldmap: OffscreenCanvas,
   minimap: OffscreenCanvas,
@@ -77,15 +83,34 @@ function setupApp(
     worldWidth: worldMapState.get('pointWidth'),
     worldHeight: worldMapState.get('pointHeight'),
     divWheel: divWheelMock as any,
-  });
+  }) as any;
   viewport.wheel().drag().decelerate();
   app.stage.addChild(viewport as any);
 
   viewport.on('moved', event => {
-    viewport$.next(event.viewport);
+    viewport$.next(viewport);
   })
   viewport$ = new BehaviorSubject<Viewport>(viewport);
 
+  // setup worldmap
+  worldMapManager = new WorldMapManager(worldMapState);
+  worldMap = new WorldMap(worldMapManager, assets);
+  viewport.removeChildren();
+  viewport.addChild(worldMap.chunksLayer as any);
+  viewport.addChild(worldMap.overlayLayer as any);
+  viewport.addChild(worldMap.riversLayer as any);
+  viewport.addChild(worldMap.roadsLayer as any);
+  viewport.addChild(worldMap.gridLayer as any);
+  viewport.addChild(worldMap.regionLayer as any);
+  viewport.addChild(worldMap.iconsLayer as any);
+  viewport.addChild(worldMap.debugGraphics as any);
+  viewport.addChild(worldMap.labelContainer as any);
+
+  viewport$.subscribe(() => {
+    worldMap.onViewportMoved(viewport);
+  });
+
+  // setup minimap
   const minimapApp = new Application({
     width: minimapCanvas.width,
     height: minimapCanvas.height,
@@ -103,15 +128,15 @@ function setupApp(
     viewport$.next(viewport);
   });
 
-  const bg = new Sprite(Texture.WHITE);
-  bg.width = worldMapState.get('pointWidth');
-  bg.height = worldMapState.get('pointHeight');
-  bg.position.set(0, 0);
-  bg.tint = 0x333333;
-  viewport.addChild(bg as any);
-  const sprite = new Sprite(assets.hexMask);
-  sprite.position.set(0, 0);
-  viewport.addChild(sprite as any);
+  // const bg = new Sprite(Texture.WHITE);
+  // bg.width = worldMapState.get('pointWidth');
+  // bg.height = worldMapState.get('pointHeight');
+  // bg.position.set(0, 0);
+  // bg.tint = 0x333333;
+  // viewport.addChild(bg as any);
+  // const sprite = new Sprite(assets.hexMask);
+  // sprite.position.set(0, 0);
+  // viewport.addChild(sprite as any);
 }
 
 type LoaderType = 'png' | 'json';
@@ -176,6 +201,7 @@ const worker = {
   ) {
     const loader = new Loader();
     loader.add('hexMask', 'png', require('../assets/hex-mask.png'))
+    loader.add('hexTemplate', 'png', require('../assets/hex-template.png'))
     loader.add('autogenObjectsPNG', 'png', require('../assets/autogen-objects.png'))
     loader.add('tilesetPNG', 'png', require('../assets/tileset.png'))
     loader.add('gridTexture', 'png', require('../assets/grid.png'))
@@ -185,6 +211,11 @@ const worker = {
     console.log('resources', resources);
     const assets: Assets = {
       borderTileset: new Tileset(resources.borderTileset.baseTexture, {
+        tileSize: { width: 64, height: 60 },
+        columns: 6,
+        tilePadding: 0,
+      }),
+      hexTemplate: new Tileset(resources.hexTemplate, {
         tileSize: { width: 64, height: 60 },
         columns: 6,
         tilePadding: 0,
@@ -280,6 +311,10 @@ const worker = {
 
   minimapPointerOut(event: WorkerPointerEvent) {
     minimap.pointerOut();
+  },
+
+  changeMapMode(mapModeType: MapModeType) {
+    worldMapManager.setMapMode(mapModeType);
   },
 };
 expose(worker);

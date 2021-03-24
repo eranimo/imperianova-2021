@@ -1,5 +1,5 @@
 import { Size } from 'src/types';
-import { Texture, BaseTexture, Rectangle, } from './pixi';
+import { Texture, BaseTexture, Rectangle, } from 'pixi.js';
 
 export type TilesetOptions = {
   tileSize: Size,

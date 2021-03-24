@@ -9,7 +9,7 @@ import { EntityManager, Entity, ExportData } from '../entity-system/EntityManage
 import { GameInfoComponent, components } from './components';
 import { createGameInfo } from './entities';
 import { setupGame } from './setupGame';
-import { WorldMap } from '../../WorldViewer/WorldMap';
+import { MapModeType } from '../../WorldViewer/mapMode';
 
 
 export type GameData = {
@@ -26,7 +26,6 @@ export type Context = {
   game: Game,
   world: World,
   worldGrid: WorldGrid,
-  worldMap?: WorldMap,
 };
 
 export class Game {
@@ -40,6 +39,7 @@ export class Game {
   entityUpdates$: Subject<Entity>;
 
   context: Context;
+  mapMode$: BehaviorSubject<MapModeType> = new BehaviorSubject(MapModeType.Terrain);
 
   constructor(
     public world: World,
@@ -64,7 +64,7 @@ export class Game {
     registerSystems(entityManager);
     this.gameInfo = createGameInfo(entityManager, {
       date: currentDate,
-    })
+    });
     this.entityManager = entityManager;
   }
 
@@ -126,5 +126,9 @@ export class Game {
   pause() {
     this.isPlaying$.next(false);
     this.deltaframe.stop();
+  }
+
+  changeMapMode(mapModeType: MapModeType) {
+    this.mapMode$.next(mapModeType);
   }
 }
