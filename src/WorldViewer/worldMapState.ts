@@ -6,6 +6,7 @@ export type WorldMapStateHex = {
   index: number,
   terrainType: number,
   population: number,
+  height: number,
   coordX: number,
   coordY: number,
   posX: number,
@@ -23,6 +24,7 @@ export const WorldMapState = MapViewMixin({
     hexHeight: { type: 'integer', btype: 'uint32' },
     pointWidth: { type: 'integer', btype: 'uint32' },
     pointHeight: { type: 'integer', btype: 'uint32' },
+    sealevel: { type: 'integer', btype: 'uint32' },
     hexes: {
       type: 'array',
       items: {
@@ -32,6 +34,7 @@ export const WorldMapState = MapViewMixin({
           index: { type: 'integer', btype: 'uint32' },
           terrainType: { type: 'integer', btype: 'uint32' },
           population: { type: 'integer', btype: 'uint32' },
+          height: { type: 'integer', btype: 'uint32' },
           coordX: { type: 'integer', btype: 'uint32' },
           coordY: { type: 'integer', btype: 'uint32' },
           posX: { type: 'integer', btype: 'uint32' },

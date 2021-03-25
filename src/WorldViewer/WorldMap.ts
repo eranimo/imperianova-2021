@@ -153,22 +153,18 @@ export class WorldMap {
 
     this.cull = new cull.Simple();
 
-    this.renderDebug();
     this.render();
 
     const updateMap = () => {
-      console.log('update map');
       for (const [hex, overlaySprite] of this.hexOverlaySprites) {
-        const state = manager.hexList[hex];
-        overlaySprite.tint = manager.mapMode$.value.setTile(state);
+        overlaySprite.tint = manager.mapMode$.value.setTile(hex, manager);
       }
     }
 
     manager.dirty$.subscribe(updateMap);
     manager.dirtyHex$.subscribe(hexIndex => {
       const overlaySprite = this.hexOverlaySprites.get(hexIndex);
-      const state = manager.hexList[hexIndex];
-      overlaySprite.tint = manager.mapMode$.value.setTile(state);
+      overlaySprite.tint = manager.mapMode$.value.setTile(hexIndex, manager);
     });
 
     manager.mapMode$.subscribe(mapMode => {
@@ -315,7 +311,7 @@ export class WorldMap {
       // overlay
       if (!this.hexOverlaySprites.has(hexIndex)) {
         const overlaySprite = new Sprite(this.assets.hexMask);
-        overlaySprite.tint = this.manager.mapMode$.value.setTile(hex);
+        overlaySprite.tint = this.manager.mapMode$.value.setTile(hex.index, this.manager);
         overlaySprite.position.set(x, y);
         overlaySprite.width = this.assets.hexMask.width;
         overlaySprite.height = this.assets.hexMask.height;
@@ -449,40 +445,5 @@ export class WorldMap {
     // await Promise.all(chunkPromises);
     console.timeEnd('draw chunks');
     console.groupEnd();
-  }
-
-  renderDebug() {
-    // debug
-    // for (const hex of this.manager.hexes()) {
-    //   const corners = hex.round().corners().map(corner => corner.add(point));
-    //   const center = {
-    //     x: (64 / 2) + hex.posX,
-    //     y: (60 / 2) + hex.posY,
-    //   };
-    //   const [firstCorner, ...otherCorners] = corners
-
-    //   // rivers
-    //   if (this.world.hexRiverEdges.containsKey(hex)) {
-    //     this.debugGraphics.lineStyle(5, DEBUG_RIVER_COLOR);
-    //     for (const [p1, p2] of this.world.hexRiverPoints.getValue(hex)) {
-    //       this.debugGraphics.moveTo(p1.x, p1.y);
-    //       this.debugGraphics.lineTo(p2.x, p2.y);
-    //     }
-    //   }
-
-    //   // roads
-    //   if (this.world.hexRoads.has(hex)) {
-    //     this.debugGraphics.lineStyle(3, DEBUG_ROAD_COLOR);
-    //     for (const direction of directionIndexOrder) {
-    //       if (this.world.hexRoads.get(hex).get(direction)) {
-    //         const [c1, c2] = directionCorners[direction];
-    //         const x = (corners[c1].x + corners[c2].x) / 2;
-    //         const y = (corners[c1].y + corners[c2].y) / 2;
-    //         this.debugGraphics.moveTo(center.x, center.y);
-    //         this.debugGraphics.lineTo(x, y);
-    //       }
-    //     }
-    //   }
-    // }
   }
 }

@@ -50,68 +50,16 @@ class WorldViewerWorkerClient {
     worldMapCanvas.width = window.innerWidth;
     worldMapCanvas.height = window.innerHeight;
 
-    // create world map state
-    console.log('Game', game);
-    const hexes: WorldMapStateHex[] = [];
-    for (const hex of game.world.hexgrid) {
-      const river = {
-        [Direction.SE]: 0,
-        [Direction.NE]: 0,
-        [Direction.N]: 0,
-        [Direction.NW]: 0,
-        [Direction.SW]: 0,
-        [Direction.S]: 0,
-      };
-      if (game.world.riverHexPairs.has(hex)) {
-        for (const dir of directionIndexOrder) {
-          const neighbor = game.world.getHexNeighbor(hex.x, hex.y, dir);
-          river[dir] = Number(game.world.riverHexPairs.get(hex).has(neighbor));
-        }
-      }
-      const road = {
-        [Direction.SE]: 0,
-        [Direction.NE]: 0,
-        [Direction.N]: 0,
-        [Direction.NW]: 0,
-        [Direction.SW]: 0,
-        [Direction.S]: 0,
-      };
-      if (game.world.hexRoads.has(hex)) {
-        for (const dir of directionIndexOrder) {
-          road[dir] = Number(game.world.hexRoads.get(hex).has(dir));
-        }
-      }
-      const pos = game.world.getHexPosition(hex.x, hex.y);
-      hexes.push({
-        index: hex.index,
-        terrainType: game.world.getTerrain(hex),
-        population: 0,
-        coordX: hex.x,
-        coordY: hex.y,
-        posX: pos[0],
-        posY: pos[1],
-        river: river as any,
-        road: road as any,
-      })
-    }
-    const worldMapStateRaw = {
-      hexWidth: game.world.gridSize.width,
-      hexHeight: game.world.gridSize.height,
-      pointWidth: game.world.hexgrid.pointWidth(),
-      pointHeight: game.world.hexgrid.pointHeight(),
-      hexes,
-      // regions: [], 
-    }
-    const length = WorldMapState.getLength(worldMapStateRaw);
-    const sab = new SharedArrayBuffer(length);
-    const worldMapState = WorldMapState.from(worldMapStateRaw, new DataView(sab));
-
     await worker.init(
       Transfer(worldMapCanvas.transferControlToOffscreen()) as any,
       Transfer(minimapCanvas.transferControlToOffscreen()) as any,
-      sab,
+      game.gameMap.sab,
       window.devicePixelRatio,
     );
+
+    game.gameMap.worldDirty$.subscribe(() => {
+      worker.worldDirty();
+    });
 
     return new WorldViewerWorkerClient(game, worker);
   }
@@ -232,6 +180,7 @@ export const WorldViewer = () => {
     down: false,
   });
   useEvent('keydown', event => {
+    if (!managerRef.current) return;
     if (event.target.nodeName === 'BODY') {
       if (event.key === 'w' || event.key === 'ArrowUp') {
         keysPressed.current.up = true;
@@ -249,6 +198,7 @@ export const WorldViewer = () => {
     }
   });
   useEvent('keyup', event => {
+    if (!managerRef.current) return;
     if (event.target.nodeName === 'BODY') {
       if (event.key === 'w' || event.key === 'ArrowUp') {
         keysPressed.current.up = false;

@@ -393,18 +393,21 @@ export class EntityManager {
     this.maintain();
     this.ticks++;
     for (const system of this.systems) {
-      if (system.frequency > 1) {
-        const lastTick = this.systemLastTick.get(system);
-        if (lastTick === undefined) {
+      const lastTick = this.systemLastTick.get(system);
+      if (lastTick === undefined) {
+        this.systemLastTick.set(system, this.ticks);
+        system.update(deltaTime);
+      } else {
+        if (system.frequency > 1) {
+          if ((this.ticks - lastTick) === system.frequency) {
+            this.systemLastTick.set(system, this.ticks);
+            system.update(deltaTime);
+          }
+        } else {
+          this.systemLastTick.set(system, this.ticks);
           system.update(deltaTime);
-          continue;
-        }
-        if ((this.ticks - lastTick) < system.frequency) {
-          continue;
         }
       }
-      this.systemLastTick.set(system, this.ticks);
-      system.update(deltaTime);
     }
 
     console.log(this.export());

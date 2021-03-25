@@ -7,6 +7,7 @@ import { Application, Container, ParticleContainer, Point, Sprite, Texture } fro
 import { WorldMapStateHex } from './worldMapState';
 import { Assets, WorkerPointerEvent } from './WorldViewer.worker';
 import { GlowFilter } from 'pixi-filters';
+import { WorldMapManager } from './WorldMapManager';
 
 export class WorldMinimap {
   container: Container;
@@ -18,14 +19,14 @@ export class WorldMinimap {
 
   constructor(
     app: Application,
-    public worldMapState: MapView,
+    public worldMapManager: WorldMapManager,
     private assets: Assets,
     private size: Size,
     viewport$: BehaviorSubject<Viewport>,
   ) {
     this.container = new Container();
-    const width = worldMapState.get('hexWidth');
-    const height = worldMapState.get('hexHeight');
+    const width = worldMapManager.worldMapState.get('hexWidth');
+    const height = worldMapManager.worldMapState.get('hexHeight');
     const maxSize = width * height;
     console.log('maxSize', maxSize);
     this.map = new ParticleContainer(maxSize, {
@@ -34,8 +35,8 @@ export class WorldMinimap {
     this.container.addChild(this.map);
     app.stage.addChild(this.container);
     
-    const worldWidth = worldMapState.get('pointWidth');
-    const worldHeight = worldMapState.get('pointHeight');
+    const worldWidth = worldMapManager.worldMapState.get('pointWidth');
+    const worldHeight = worldMapManager.worldMapState.get('pointHeight');
     const scale = ([x, y]: Coord) => {
       return [
         (x / worldWidth) * size.width,
@@ -44,7 +45,7 @@ export class WorldMinimap {
     }
 
     this.hexSprites = new Map();
-    worldMapState.get('hexes').forEach((hex: WorldMapStateHex) => {
+    for (const hex of worldMapManager.hexes()) {
       const terrainType = hex.terrainType
       const hexSprite = new Sprite(assets.hexMask);
       hexSprite.tint = terrainColors[terrainType];
@@ -54,7 +55,7 @@ export class WorldMinimap {
       hexSprite.height = (assets.hexMask.height / worldHeight) * size.height;
       this.map.addChild(hexSprite);
       this.hexSprites.set(hex.index, hexSprite);
-    });
+    }
 
     const frame = new Sprite(Texture.WHITE);
     const updateFrame = (viewport: Viewport) => {
@@ -86,6 +87,13 @@ export class WorldMinimap {
       (event.x / size.width) * worldWidth,
       (event.y / size.height) * worldHeight
     );
+
+    worldMapManager.dirty$.subscribe(() => {
+      for (let i = 0; i < worldMapManager.hexLength; i++) {
+        const hexSprite = this.hexSprites.get(i);
+        hexSprite.tint = worldMapManager.mapMode$.value.setTile(i, worldMapManager);
+      }
+    });
   }
 
   pointerUp(event: WorkerPointerEvent) {
@@ -106,14 +114,5 @@ export class WorldMinimap {
 
   pointerOut() {
     this.isDragging = false;
-  }
-
-  updateHexColors(
-    getColor: (hex: WorldMapStateHex) => number,
-  ) {
-    this.worldMapState.get('hexes').forEach((hex: WorldMapStateHex) => {
-      const hexSprite = this.hexSprites.get(hex.index);
-      hexSprite.tint = getColor(hex);
-    });
   }
 }

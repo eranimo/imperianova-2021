@@ -1,8 +1,8 @@
 import { BehaviorSubject, Subject } from 'rxjs';
-import { MapView } from 'structurae';
+import { ArrayView, MapView } from 'structurae';
 import { MapMode, MapModeType, mapModes, TileStates } from './mapMode';
 import { Size } from '../types';
-import { WorldMapStateHex } from './worldMapState';
+import { WorldMapStateHex, WorldMapState } from './worldMapState';
 import { Grid2D } from '../utils/Grid2D';
 
 const defaultMapMode = MapModeType.Terrain;
@@ -17,15 +17,18 @@ export class WorldMapManager {
   mapSizePixels: Size;
   private tileStates: TileStates;
   hexCoordForIndex: Grid2D<number>;
-  hexList: WorldMapStateHex[];
+  hexLength: number;
+
+  hexesView: ArrayView;
 
   constructor(worldMapState: MapView) {
     this.worldMapState = worldMapState;
-    this.hexList = worldMapState.get('hexes');
+    this.hexesView = this.worldMapState.getView('hexes') as ArrayView;
     this.mapSize = {
       width: worldMapState.get('hexWidth'),
       height: worldMapState.get('hexHeight'),
     };
+    this.hexLength = this.mapSize.width * this.mapSize.height;
     this.hexCoordForIndex = new Grid2D(this.mapSize.width, this.mapSize.height);
     this.mapSizePixels = {
       width: worldMapState.get('pointWidth'),
@@ -47,11 +50,15 @@ export class WorldMapManager {
   }
 
   getHex(index: number): WorldMapStateHex {
-    return this.hexList[index];
+    return this.hexesView.get(index);
+  }
+
+  getHexField<K extends keyof WorldMapStateHex>(index: number, field: K): WorldMapStateHex[K] {
+    return (this.hexesView.getView(index) as any).get(field);
   }
 
   *hexes() {
-    for (const hex of this.hexList) {
+    for (const hex of this.worldMapState.get('hexes')) {
       yield hex as WorldMapStateHex;
     }
   }
@@ -61,12 +68,17 @@ export class WorldMapManager {
     this.mapModeType$.next(mapModeType);
     const inst = mapModes.get(mapModeType)
     if (inst.init) {
-      inst.init(this.tileStates);
+      inst.init(this);
     }
     this.mapMode$.next(inst);
+    this.renderWorld();
   }
 
   renderWorld() {
+    const inst = this.mapMode$.value;
+    if (inst.init) {
+      inst.init(this);
+    }
     this.dirty$.next(true);
   }
 

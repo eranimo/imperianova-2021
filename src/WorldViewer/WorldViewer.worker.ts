@@ -48,9 +48,6 @@ function setupState(
   worldMapState = new WorldMapState(worldMapStateBuffer);
 
   console.log('worldMapState', worldMapState);
-  console.log(worldMapState.get('hexes').length);
-  console.log(worldMapState.get('hexes')[0]);
-  console.log(worldMapState.toJSON());
 }
 
 function setupApp(
@@ -118,7 +115,7 @@ function setupApp(
     resolution,
     view: minimapCanvas as any,
   });
-  minimap = new WorldMinimap(minimapApp, worldMapState, assets, {
+  minimap = new WorldMinimap(minimapApp, worldMapManager, assets, {
     width: minimapCanvas.width / resolution,
     height: minimapCanvas.height / resolution,
   }, viewport$);
@@ -316,6 +313,12 @@ const worker = {
   changeMapMode(mapModeType: MapModeType) {
     worldMapManager.setMapMode(mapModeType);
   },
+
+  worldDirty() {
+    // console.log('world dirty');
+    // console.log((worldMapManager.worldMapState.toJSON() as any).hexes.filter(i => i.population > 0));
+    worldMapManager.renderWorld();
+  }
 };
 expose(worker);
 

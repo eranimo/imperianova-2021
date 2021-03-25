@@ -18,41 +18,36 @@ export class PopSystem extends System {
   }
 }
 
-// export class PopDisplaySystem extends System {
-//   query: Query;
+export class PopDisplaySystem extends System {
+  query: Query;
 
-//   init(manager: EntityManager) {
-//     this.query = manager.createQuery(entity => 
-//       entity.hasComponent(HexPositionComponent) &&
-//       entity.hasComponent(WorldTileDataComponent)
-//     );
-//   }
+  init(manager: EntityManager) {
+    this.query = manager.createQuery(entity => 
+      entity.hasComponent(HexPositionComponent) &&
+      entity.hasComponent(WorldTileDataComponent)
+    );
+  }
 
-//   update() {
-//     const { world, worldMap } = this.entityManager.context;
-//     for (const tile of this.query.entities) {
-//       const pos = tile.getComponent(HexPositionComponent);
-//       const tileData = tile.getComponent(WorldTileDataComponent);
+  update() {
+    const { world, gameMap } = this.entityManager.context;
+    for (const tile of this.query.entities) {
+      const pos = tile.getComponent(HexPositionComponent);
+      const tileData = tile.getComponent(WorldTileDataComponent);
 
-//       let tileSize = 0;
-//       for (const pop of tileData.value.pops) {
-//         const popData = pop.getComponent(PopDataComponent);
-//         tileSize += popData.value.size;
-//       }
+      let tileSize = 0;
+      for (const pop of tileData.value.pops) {
+        const popData = pop.getComponent(PopDataComponent);
+        tileSize += popData.value.size;
+      }
 
-//       if (worldMap) {
-//         const hex = world.getHex(pos.value.x, pos.value.y);
-//         worldMap.setTileState(hex, 'population', tileSize);
-//       }
-//     }
-//     if (worldMap) {
-//       worldMap.setMapMode(worldMap.currentMapMode);
-//     }
-//   }
-
-// }
+      const hex = world.getHex(pos.value.x, pos.value.y);
+      gameMap.setHexState(hex.index, 'population', tileSize);
+    }
+    gameMap.setWorldDirty();
+  }
+}
 
 export function registerSystems(manager: EntityManager) {
   manager.registerSystem(new PopSystem());
-  // manager.registerSystem(new PopDisplaySystem(10));
+  manager.registerSystem(new PopDisplaySystem(30));
 }
