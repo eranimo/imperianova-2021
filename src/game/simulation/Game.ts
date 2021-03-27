@@ -75,6 +75,10 @@ export class Game {
     this.entityManager = entityManager;
   }
 
+  get isPlaying() {
+    return this.isPlaying$.value;
+  }
+
   static create(options: GameOptions) {
     const worldGen = new WorldGenerator();
     const world = worldGen.generate(options.world);

@@ -11,6 +11,7 @@ import { defaultOptions } from './NewGame';
 import { parse } from 'query-string';
 import { useLocation } from 'react-router';
 import { GameStore } from '../../game/simulation/GameStore';
+import { useKeyPressEvent } from 'react-use';
 
 enum WorldSize {
   SMALL = 75,
@@ -65,6 +66,15 @@ export const GameView = ({ location }) => {
       setGame(game);
     }
   }, [location]);
+
+  useKeyPressEvent(' ', (event) => {
+    if ((event.target as any).nodeName !== 'BODY') return;
+    if (gameRef.isPlaying) {
+      gameRef.pause();
+    } else {
+      gameRef.play();
+    }
+  });
 
   return (
     <>
