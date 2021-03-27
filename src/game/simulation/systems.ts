@@ -43,7 +43,7 @@ export class PopDisplaySystem extends System {
       const hex = world.getHex(pos.value.x, pos.value.y);
       gameMap.setHexState(hex.index, 'population', tileSize);
     }
-    gameMap.setWorldDirty();
+    gameMap.renderWorld();
   }
 }
 

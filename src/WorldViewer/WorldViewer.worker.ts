@@ -3,7 +3,6 @@ import './patch';
 import { Viewport, Plugin } from 'pixi-viewport';
 import { Tileset } from './Tileset';
 import { HexSectionTileset } from './HexSectionTileset';
-import { decode } from 'fast-png';
 import tilesetJson from '../assets/tileset.json';
 import { Application, Sprite, Texture, Point, Container } from 'pixi.js';
 import { WorldMapState } from './worldMapState';
@@ -13,6 +12,10 @@ import { BehaviorSubject } from 'rxjs';
 import { WorldMapManager } from './WorldMapManager';
 import { WorldMap } from './WorldMap';
 import { MapModeType } from './mapMode';
+import { WorkerLoader } from './WorkerLoader';
+import { Observable as WorkerObservable, Subject as WorkerSubject } from "threads/observable";
+import { Coordinate } from '../types';
+import { throttle } from 'lodash';
 
 export type Assets = {
   borderTileset: Tileset,
@@ -41,6 +44,9 @@ let canvases: {
 let zoomCallback: Function;
 let worldMapState: MapView;
 let viewport$: BehaviorSubject<Viewport>;
+const hoverPoint = new WorkerSubject<Coordinate>();
+const clickPoint = new WorkerSubject<Coordinate>();
+
 
 function setupState(
   worldMapStateBuffer: SharedArrayBuffer,
@@ -107,6 +113,16 @@ function setupApp(
     worldMap.onViewportMoved(viewport);
   });
 
+  viewport.on('pointermove', throttle(({ data }) => {
+    const { x, y } = viewport.toWorld(data.global);
+    hoverPoint.next({ x, y });
+  }), 1000);
+
+  viewport.on('clicked', (event) => {
+    const { x, y } = (event as any).world;
+    clickPoint.next({ x, y });
+  });
+
   // setup minimap
   const minimapApp = new Application({
     width: minimapCanvas.width,
@@ -136,41 +152,7 @@ function setupApp(
   // viewport.addChild(sprite as any);
 }
 
-type LoaderType = 'png' | 'json';
-
-class Loader {
-  promises: Array<Promise<string | ArrayBuffer>> = [];
-  assets: { name: string, type: LoaderType }[] = [];
-
-  add(name: string, type: LoaderType, url: string) {
-    if (type === 'png') {
-      this.promises.push(
-        fetch(url).then(resp => resp.arrayBuffer())
-      );
-    } else if (type === 'json') {
-      this.promises.push(
-        fetch(url).then(resp => resp.json())
-      );
-    }
-    this.assets.push({ name, type });
-  }
-
-  async load(): Promise<Record<string, any>> {
-    const response = await Promise.all(this.promises);
-    const resources = {};
-    for (const [index, asset] of this.assets.entries()) {
-      const assetValue = response[index];
-      if (assetValue instanceof ArrayBuffer) {
-        const { data, width, height } = decode(assetValue);
-        const texture = Texture.fromBuffer(data as any, width, height);
-        resources[asset.name] = texture;
-      } else {
-        resources[asset.name] = assetValue;
-      }
-    }
-    return resources;
-  }
-}
+export type LoaderType = 'png' | 'json';
 
 export type WorkerPointerEvent = {
   pointerId: number,
@@ -196,7 +178,7 @@ const worker = {
     worldMapStateBuffer: SharedArrayBuffer,
     resolution: number,
   ) {
-    const loader = new Loader();
+    const loader = new WorkerLoader();
     loader.add('hexMask', 'png', require('../assets/hex-mask.png'))
     loader.add('hexTemplate', 'png', require('../assets/hex-template.png'))
     loader.add('autogenObjectsPNG', 'png', require('../assets/autogen-objects.png'))
@@ -225,6 +207,9 @@ const worker = {
     setupState(worldMapStateBuffer);
     setupApp(worldMapCanvas, minimapCanvas, assets, resolution);
   },
+
+  hoverPoint$: () => WorkerObservable.from(hoverPoint),
+  clickPoint$: () => WorkerObservable.from(clickPoint),
 
   viewportResize(width: number, height: number) {
     console.log('(worker) window resize', width, height);

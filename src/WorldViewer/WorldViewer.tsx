@@ -1,19 +1,16 @@
-import { Viewport } from 'pixi-viewport';
 import React, { useContext, useEffect, useRef, useState } from 'react';
-import { BehaviorSubject } from 'rxjs';
-import { ModuleThread, spawn, Transfer } from 'threads';
-import WorldViewerWorker from 'worker-loader!./WorldViewer.worker.ts';
 import { GameContext } from '../ui/pages/GameView';
-import type { WorldViewerClient } from './WorldViewer.worker';
-import { Game } from '../game/simulation/Game';
 import { WorldMapState, WorldMapStateHex } from './worldMapState';
 import { useEvent, useWindowSize } from 'react-use';
 import { KeyDirection } from './WorldViewer.worker';
-import { Direction, directionIndexOrder } from '../types';
+import { Direction, directionIndexOrder, Coordinate } from '../types';
+import { WorldViewerWorkerClient } from './WorldViewerWorkerClient';
+import { MapModeTooltip } from './MapModeTooltip';
 import { MapModeType } from './mapMode';
+import { GridFactory } from '../game/world/World';
 
 
-const createWorkerPointerEvent = (event: PointerEvent) => ({
+export const createWorkerPointerEvent = (event: PointerEvent) => ({
   pointerId: event.pointerId,
   pointerType: event.pointerType,
   button: event.button,
@@ -21,7 +18,7 @@ const createWorkerPointerEvent = (event: PointerEvent) => ({
   y: event.offsetY,
 });
 
-const createWorkerZoomEvent = (e: WheelEvent) => ({
+export const createWorkerZoomEvent = (e: WheelEvent) => ({
   deltaX: e.deltaX,
   deltaY: e.deltaY,
   deltaZ: e.deltaZ,
@@ -31,91 +28,38 @@ const createWorkerZoomEvent = (e: WheelEvent) => ({
 });
 
 
-class WorldViewerWorkerClient {
-  viewport$: BehaviorSubject<Viewport>;
+const TooltipContainer = ({
+  worldPosition,
+  position,
+  mapMode,
+}: {
+  worldPosition: Coordinate,
+  position: Coordinate,
+  mapMode: MapModeType,
+}) => {
+  const game = useContext(GameContext);
+  const [hexIndex, setHexIndex] = useState<number>(null);
 
-  constructor(
-    private game: Game,
-    private worker: ModuleThread<WorldViewerClient>
-  ) {
+  useEffect(() => {
+    const hexPosition = GridFactory.pointToHex(worldPosition);
+    const hex = game.world.getHex(hexPosition.x, hexPosition.y);
+    if (hex) {
+      setHexIndex(hex.index);
+    }
+  }, [worldPosition]);
 
+  if (!hexIndex || !position || !worldPosition) {
+    return null;
   }
 
-  static async create(
-    game: Game,
-    worldMapCanvas: HTMLCanvasElement,
-    minimapCanvas: HTMLCanvasElement,
-  ) {
-    const worker = await spawn<WorldViewerClient>(new WorldViewerWorker());
-    worldMapCanvas.width = window.innerWidth;
-    worldMapCanvas.height = window.innerHeight;
-
-    await worker.init(
-      Transfer(worldMapCanvas.transferControlToOffscreen()) as any,
-      Transfer(minimapCanvas.transferControlToOffscreen()) as any,
-      game.gameMap.sab,
-      window.devicePixelRatio,
-    );
-
-    game.gameMap.worldDirty$.subscribe(() => {
-      worker.worldDirty();
-    });
-
-    return new WorldViewerWorkerClient(game, worker);
-  }
-
-  viewportMove(keys: Record<KeyDirection, boolean>) {
-    this.worker.viewportMove(keys);
-  }
-
-  viewportResize(width: number, height: number) {
-    console.log('(client) window resize');
-    this.worker.viewportResize(width, height);
-  }
-
-  viewportZoom(event: WheelEvent) {
-    this.worker.viewportZoom(createWorkerZoomEvent(event));
-  }
-
-  viewportPointerDown(event: PointerEvent) {
-    this.worker.viewportPointerDown(createWorkerPointerEvent(event));
-  }
-
-  viewportPointerMove(event: PointerEvent) {
-    this.worker.viewportPointerMove(createWorkerPointerEvent(event));
-  }
-
-  viewportPointerUp(event: PointerEvent) {
-    this.worker.viewportPointerUp(createWorkerPointerEvent(event));
-  }
-
-  viewportPointerCancel(event: PointerEvent) {
-    this.worker.viewportPointerCancel(createWorkerPointerEvent(event));
-  }
-
-  viewportPointerOut(event: PointerEvent) {
-    this.worker.viewportPointerOut(createWorkerPointerEvent(event));
-  }
-
-  minimapPointerUp(event: PointerEvent) {
-    this.worker.minimapPointerUp(createWorkerPointerEvent(event));
-  }
-
-  minimapPointerDown(event: PointerEvent) {
-    this.worker.minimapPointerDown(createWorkerPointerEvent(event));
-  }
-
-  minimapPointerMove(event: PointerEvent) {
-    this.worker.minimapPointerMove(createWorkerPointerEvent(event));
-  }
-
-  minimapPointerOut(event: PointerEvent) {
-    this.worker.minimapPointerOut(createWorkerPointerEvent(event));
-  }
-
-  changeMapMode(mapModeType: MapModeType) {
-    this.worker.changeMapMode(mapModeType);
-  }
+  return (
+    <MapModeTooltip
+      gameMap={game.context.gameMap}
+      mapMode={mapMode}
+      hexIndex={hexIndex}
+      position={position}
+    />
+  );
 }
 
 export const WorldViewer = () => {
@@ -123,8 +67,11 @@ export const WorldViewer = () => {
   const worldMapRef = useRef<HTMLCanvasElement>();
   const minimapRef = useRef<HTMLCanvasElement>();
   const [isLoading, setLoading] = useState(true);
-
+  const [tooltipPosition, setTooltipPosition] = useState<Coordinate>(null);
+  const [worldPosition, setWorldPosition] = useState<Coordinate>(null);
+  const [mapMode, setMapMode] = useState(null);
   const managerRef = useRef<WorldViewerWorkerClient>();
+  const isPanning = useRef(false);
 
   useEffect(() => {
     console.log('setup world manager');
@@ -134,7 +81,16 @@ export const WorldViewer = () => {
       setLoading(false);
 
       game.mapMode$.subscribe((mapModeType) => {
+        setMapMode(mapModeType);
         managerRef.current.changeMapMode(mapModeType);
+      });
+
+      manager.hoverPoint$.subscribe(point => {
+        setWorldPosition(point);
+      });
+
+      manager.clickPoint$.subscribe(point => {
+        console.log('Clicked on point', point);
       });
 
       // viewport events
@@ -143,18 +99,30 @@ export const WorldViewer = () => {
       }, { passive: true });
       worldMapRef.current.addEventListener('pointerdown', (e) => {
         managerRef.current.viewportPointerDown(e);
+        isPanning.current = true;
+        setWorldPosition(null);
+        setTooltipPosition(null)
       });
       worldMapRef.current.addEventListener('pointermove', (e) => {
         managerRef.current.viewportPointerMove(e);
+        if (!isPanning.current) {
+          setTooltipPosition({
+            x: e.clientX,
+            y: e.clientY,
+          });
+        }
       });
       worldMapRef.current.addEventListener('pointerup', (e) => {
         managerRef.current.viewportPointerUp(e);
+        isPanning.current = false;
       });
       worldMapRef.current.addEventListener('pointercancel', (e) => {
         managerRef.current.viewportPointerCancel(e);
       });
       worldMapRef.current.addEventListener('pointerout', (e) => {
         managerRef.current.viewportPointerOut(e);
+        setWorldPosition(null);
+        setTooltipPosition(null)
       });
 
       // minimap events
@@ -256,6 +224,11 @@ export const WorldViewer = () => {
           }}
         />
       </div>
+      <TooltipContainer
+        worldPosition={worldPosition}
+        position={tooltipPosition}
+        mapMode={mapMode}
+      />
     </div>
   );
 }
