@@ -14,13 +14,14 @@ type MapModeTooltipProps = {
 const useGameMapState = <K extends keyof WorldMapStateHex>(gameMap: GameMap, hexIndex: number, field: K) => {
   const [value, setValue] = useState(gameMap.getHexState(hexIndex, field));
   useEffect(() => {
+    setValue(gameMap.getHexState(hexIndex, field));
     const sub = gameMap.hexFieldUpdates.subscribe(update => {
       if (update.field === field) {
         setValue(update.value);
       }
     });
     return () => sub.unsubscribe();
-  }, []); 
+  }, [hexIndex]); 
   return value;
 }
 
