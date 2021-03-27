@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapModeType } from './mapMode';
 import { GameMap } from '../game/simulation/GameMap';
 import { Coordinate } from '../types';
-import { Box } from '@chakra-ui/react';
+import { Box, Text } from '@chakra-ui/react';
 import { terrainTypeTitles } from '../game/world/terrain';
 import { WorldMapStateHex } from './worldMapState';
 
@@ -25,23 +25,41 @@ const useGameMapState = <K extends keyof WorldMapStateHex>(gameMap: GameMap, hex
   return value;
 }
 
+const TooltipValue = ({
+  label,
+  value,
+}: {
+  label: string,
+  value: any,
+}) => (
+  <>
+    <Text color="gray.400" as="span">
+      {label}:
+    </Text>
+    {' '}
+    <Text color="gray.100" as="span">
+      {value}
+    </Text>
+  </>
+);
+
 const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = new Map([
   [MapModeType.Terrain, ({ hexIndex, gameMap }) => {
     const terrainType = useGameMapState(gameMap, hexIndex, 'terrainType');
     return (
-      <>Terrain: {terrainTypeTitles[terrainType]}</>
+      <TooltipValue label="Terrain" value={terrainTypeTitles[terrainType]} />
     );
   }],
   [MapModeType.Height, ({ hexIndex, gameMap }) => {
     const height = useGameMapState(gameMap, hexIndex, 'height');
     return (
-      <>Height: {height}</>
+      <TooltipValue label="Height" value={height} />
     );
   }],
   [MapModeType.Population, ({ hexIndex, gameMap }) => {
     const population = useGameMapState(gameMap, hexIndex, 'population');
     return (
-      <>Population: {population.toLocaleString()}</>
+      <TooltipValue label="Population" value={population.toLocaleString()} />
     );
   }],
 ]);
@@ -68,10 +86,12 @@ export const MapModeTooltip = ({
       position="absolute"
       top={position.y + 10}
       left={position.x + 10}
-      bgColor="gray.900"
-      color="blue.100"
-      p={1}
+      bgColor="rgba(20, 20, 20, 0.70)"
+      px={2}
+      py={1}
+      borderRadius={1}
       zIndex={100}
+      pointerEvents="none"
     >
       <TooltipData hexIndex={hexIndex} gameMap={gameMap} />
     </Box>
