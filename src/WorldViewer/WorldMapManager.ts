@@ -64,14 +64,13 @@ export class WorldMapManager {
   }
 
   setMapMode(mapModeType: MapModeType) {
-    console.log('set map mode', mapModeType);
     this.mapModeType$.next(mapModeType);
     const inst = mapModes.get(mapModeType)
     if (inst.init) {
       inst.init(this);
     }
     this.mapMode$.next(inst);
-    this.renderWorld();
+    this.dirty$.next(true);
   }
 
   renderWorld() {

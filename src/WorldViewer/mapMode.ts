@@ -93,7 +93,7 @@ class PopulationMapMode implements MapMode {
     }
     const population = manager.getHexField(index, 'population');
     const v = Math.round((population / this.maxPopulation) * 50);
-    const color = this.colors[v];
+    const color = isNaN(v) ? this.colors[0] : this.colors[v];
     if (!color) return 0x000000;
     return colorToNumber([
       Math.round(color[0] * 255),

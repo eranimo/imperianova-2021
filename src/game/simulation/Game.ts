@@ -83,7 +83,10 @@ export class Game {
     const worldGen = new WorldGenerator();
     const world = worldGen.generate(options.world);
     const game = new Game(world);
+    // run one tick when beginning the game
+    // game.entityManager.update();
     setupGame(game);
+    game.gameMap.renderWorld();
     return game;
   }
 
@@ -125,7 +128,7 @@ export class Game {
   update(time: number, deltaTime: number) {
     // console.log('day', this.gameinfo.c.date.dateTicks);
     this.gameInfo.getComponent(GameInfoComponent).value.date += 1;
-    this.entityManager.update();
+    this.entityManager.update(deltaTime);
   }
 
   play() {

@@ -467,7 +467,7 @@ export class Query {
 }
 
 export class System {
-  entityManager: EntityManager
+  entityManager: EntityManager;
 
   constructor(
     public frequency: number = 1,

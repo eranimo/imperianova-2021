@@ -300,8 +300,6 @@ const worker = {
   },
 
   worldDirty() {
-    // console.log('world dirty');
-    // console.log((worldMapManager.worldMapState.toJSON() as any).hexes.filter(i => i.population > 0));
     worldMapManager.renderWorld();
   }
 };

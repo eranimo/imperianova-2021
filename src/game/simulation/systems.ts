@@ -29,6 +29,7 @@ export class PopDisplaySystem extends System {
   }
 
   update() {
+    console.log('run pop display system');
     const { world, gameMap } = this.entityManager.context;
     for (const tile of this.query.entities) {
       const pos = tile.getComponent(HexPositionComponent);
