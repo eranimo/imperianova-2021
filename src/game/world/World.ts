@@ -6,6 +6,8 @@ import { MultiDictionary, Queue } from 'typescript-collections';
 import { Subject } from 'rxjs';
 import { TerrainType, terrainTypeTitles } from './terrain';
 import { WorldData } from './WorldGenerator';
+import uuid from 'uuid-random';
+import { PairSet } from '../../utils/PairSet';
 
 
 export type Hex = Honeycomb.Hex<IHex>; 
@@ -20,11 +22,8 @@ export interface IHex {
 
 export type Edge = {
   id: number;
-  direction: Direction;
   h1: Hex;
   h2: Hex;
-  p1: Honeycomb.Point,
-  p2: Honeycomb.Point,
   o1: Hex;
   o2: Hex;
   p1_edges?: [Edge, Edge];
@@ -56,8 +55,6 @@ export class World {
 
   rivers: Edge[][];
   hexNeighborDirections: Map<Hex, Map<Hex, Direction>>;
-  hexRiverEdges: MultiDictionary<Hex, Direction>;
-  hexRiverPoints: MultiDictionary<Hex, [Honeycomb.Point, Honeycomb.Point]>;
   hexRoads: Map<Hex, Map<Direction, Hex>>;
   riverHexPairs: Map<Hex, Set<Hex>>;
   landmasses: Landmass[];
@@ -188,8 +185,6 @@ export class World {
     console.log('rivers', this.rivers);
 
     console.time('build river data structures');
-    this.hexRiverEdges = new MultiDictionary();
-    this.hexRiverPoints = new MultiDictionary();
     this.riverHexPairs = new Map();
     for (const riverEdges of this.rivers) {
       for (const edge of riverEdges) {
@@ -203,14 +198,10 @@ export class World {
         } else {
           this.riverHexPairs.set(edge.h2, new Set([edge.h1]));
         }
-        this.hexRiverEdges.setValue(edge.h1, edge.direction);
-        this.hexRiverEdges.setValue(edge.h2, oppositeDirections[edge.direction]);
-        this.hexRiverPoints.setValue(edge.h1, [edge.p1, edge.p2]);
-        this.hexRiverPoints.setValue(edge.h2, [edge.p1, edge.p2]);
       }
     }
     console.timeEnd('build river data structures');
-    console.log('hexRiverEdges', this.hexRiverEdges);
+    console.log('riverHexPairs', this.riverHexPairs)
   }
 
   private buildEdgeMap() {
@@ -218,84 +209,62 @@ export class World {
     this.hexEdges = [];
     this.hexEdgeIDs = new Map();
     this.hexEdgesMap = new Map();
-    const getEmptyEdgeMap = (): DirectionMap<Edge> => ({
-      [Direction.SE]: null,
-      [Direction.NE]: null,
-      [Direction.N]: null,
-      [Direction.NW]: null,
-      [Direction.SW]: null,
-      [Direction.S]: null,
-    });
     console.time('build edge map');
     this.hexgrid.forEach((hex, index) => {
+      this.hexEdgesMap.set(hex, {
+        [Direction.SE]: null,
+        [Direction.NE]: null,
+        [Direction.N]: null,
+        [Direction.NW]: null,
+        [Direction.SW]: null,
+        [Direction.S]: null,
+      });
+    });
+    let edgeID = 0;
+    this.hexgrid.forEach((hex, index) => {
       const neighbors = this.getHexNeighbors(hex);
-      const edges = this.hexEdgesMap.get(hex) || getEmptyEdgeMap();
-      const corners = hex.corners().map(p => p.add(this.getHexPosition(hex.x, hex.y)));
-      // console.log(corners);
-      const directionEdgeCoords: DirectionMap<Honeycomb.Point[]> = {
-        [Direction.SE]: [corners[0], corners[1]],
-        [Direction.NE]: [corners[5], corners[0]],
-        [Direction.N]: [corners[4], corners[5]],
-        [Direction.NW]: [corners[3], corners[4]],
-        [Direction.SW]: [corners[2], corners[3]],
-        [Direction.S]: [corners[1], corners[2]],
-      }
+      const edges = this.hexEdgesMap.get(hex);
       for (const dir of directionIndexOrder) {
-        if (neighbors[dir]) {
-          if (!this.hexEdgesMap.has(neighbors[dir])) {
-            this.hexEdgesMap.set(neighbors[dir], getEmptyEdgeMap());
-          }
+        const neighborHex = neighbors[dir] as Hex;
+        if (neighborHex && edges[dir] === null) {
           const [adj1Dir, adj2Dir ] = adjacentDirections[dir];
-          const id = (
-            ((this.gridSize.width * this.gridSize.height ** 0) * hex.index) + 
-            ((this.gridSize.width * this.gridSize.height ** 1) * neighbors[dir].index) +
-            ((directionIndexOrder.length ** 3) * dir)
-          );
-          if (this.hexEdgeIDs.has(id)) {
-            edges[dir] = this.hexEdgesMap.get(neighbors[dir])[oppositeDirections[dir]];
-          } else {
-            const edge: Edge = {
-              direction: dir,
-              id,
-              h1: hex,
-              h2: neighbors[dir],
-              p1: directionEdgeCoords[dir][0],
-              p2: directionEdgeCoords[dir][1],
-              o1: neighbors[adj1Dir],
-              o2: neighbors[adj2Dir],
-            }
-            edges[dir] = edge;
-            this.hexEdges.push(edge);
-            this.hexEdgeIDs.set(id, edge);
-            this.hexEdgesMap.get(neighbors[dir])[oppositeDirections[dir]] = edge;
+          const edge: Edge = {
+            id: edgeID,
+            h1: hex,
+            h2: neighborHex,
+            o1: neighbors[adj1Dir],
+            o2: neighbors[adj2Dir],
           }
-          
+          edgeID++;
+          // edgePairs.add(hex, neighborHex, edge);
+          edges[dir] = edge;
+          this.hexEdges.push(edge);
+          this.hexEdgeIDs.set(edge.id, edge);
+          this.hexEdgesMap.get(neighborHex)[oppositeDirections[dir]] = edge;
         }
       }
       this.hexEdgesMap.set(hex, edges);
     });
-    console.log('hexEdgeIDs', this.hexEdgeIDs);
     console.timeEnd('build edge map');
+    console.log('hexEdgeIDs', this.hexEdgeIDs);
 
     // find adjacent edges for each edge
     console.time('find adjacent edges');
-    this.hexgrid.forEach((hex, index) => {
-      const edges = this.hexEdgesMap.get(hex);
-      for (const dir of directionIndexOrder) {
-        if (edges[dir]) {
-          const edge: Edge = edges[dir];
-          const [adj1, adj2] = adjacentDirections[dir];
-          const opposite_hex = edge.h2;
-          const opposite_dir = oppositeDirections[dir];
-          const opposite_dir_adj = adjacentDirections[opposite_dir];
-          const o1_edge = this.hexEdgesMap.get(opposite_hex)[opposite_dir_adj[0]];
-          const o2_edge = this.hexEdgesMap.get(opposite_hex)[opposite_dir_adj[1]];
-          edge.p1_edges = [edges[adj1], o1_edge];
-          edge.p2_edges = [edges[adj2], o2_edge];
-        }
-      }
-      this.hexEdgesMap.set(hex, edges);
-    });
+    for (const edge of this.hexEdges) {
+      const dir = this.hexNeighborDirections.get(edge.h1).get(edge.h2);
+      const edges = this.hexEdgesMap.get(edge.h1);
+      const neighborEdges = this.hexEdgesMap.get(edge.h2);
+      const [adj1, adj2] = adjacentDirections[dir];
+      const [adj1n, adj2n] = adjacentDirections[oppositeDirections[dir]];
+      edge.p1_edges = [
+        edges[adj1],
+        neighborEdges[adj1n]
+      ];
+      edge.p2_edges = [
+        edges[adj2],
+        neighborEdges[adj2n]
+      ];
+    }
     console.timeEnd('find adjacent edges');
     console.log('hexEdges', this.hexEdges);
     console.log('hexEdgesMap', this.hexEdgesMap);
