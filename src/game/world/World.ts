@@ -128,10 +128,10 @@ export class World {
 
   public setWorldTerrain(
     terrain: Uint32Array,
-    heightmap: Float32Array,
+    heightmap: Uint8ClampedArray,
   ) {
     (this.terrain.data as Uint32Array).set(terrain, 0);
-    (this.heightmap.data as Float32Array).set(heightmap, 0);
+    (this.heightmap.data as Uint8ClampedArray).set(heightmap, 0);
 
     // identify landmasses
     console.time('identify landmasses');
@@ -324,6 +324,40 @@ export class World {
     }
   }
 
+  isMapEdge(hex: Hex) {
+    return (
+      hex.x === 0 || hex.x === (this.gridSize.width - 1) ||
+      hex.y === 0 || hex.y === (this.gridSize.height - 1)
+    );
+  
+    // const { x, y } = hex;
+    // const se_hex = this.getHexNeighbor(x, y, Direction.SE);
+    // if (se_hex === null) {
+    //   return true;
+    // }
+    // const ne_hex = this.getHexNeighbor(x, y, Direction.NE);
+    // if (ne_hex === null) {
+    //   return true;
+    // }
+    // const n_hex = this.getHexNeighbor(x, y, Direction.N);
+    // if (n_hex === null) {
+    //   return true;
+    // }
+    // const nw_hex = this.getHexNeighbor(x, y, Direction.NW);
+    // if (nw_hex === null) {
+    //   return true;
+    // }
+    // const sw_hex = this.getHexNeighbor(x, y, Direction.SW);
+    // if (sw_hex === null) {
+    //   return true;
+    // }
+    // const s_hex = this.getHexNeighbor(x, y, Direction.S);
+    // if (s_hex === null) {
+    //   return true;
+    // }
+    // return false;
+  }
+
   *hexNeighbors(hex: Hex) {
     const { x, y } = hex;
     const se_hex = this.getHexNeighbor(x, y, Direction.SE);
@@ -372,6 +406,35 @@ export class World {
       }
     }
     return region;
+  }
+
+  bfs(
+    visited: ndarray,
+    searchFunc: (hex: Hex) => boolean,
+    hex: Hex,
+  ): Coord[] {
+    const queue: [number, number][] = [];
+    queue.unshift([hex.x, hex.y]);
+    let output = [];
+    while(queue.length) {
+      const [cx, cy] = queue.shift();
+
+      // set cell to visited
+      if (visited.get(cx, cy) === 0) {
+        visited.set(cx, cy, 1);
+        output.push([cx, cy]);
+      }
+      for (const n of this.hexNeighbors(hex)) {
+        if (visited.get(n.x, n.y) === 0) {
+          visited.set(n.x, n.y, 1);
+          if (searchFunc(n)) {
+            queue.unshift([n.x, n.y]);
+            output.push([n.x, n.y]);
+          }
+        }
+      }
+    }
+    return output;
   }
 
   getHexNeighbor(x: number, y: number, direction: Direction) {

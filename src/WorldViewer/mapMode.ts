@@ -55,6 +55,10 @@ class HeightMapMode implements MapMode {
       const index = Math.round(((height - sealevel) / (255 - sealevel)) * 50);
       color = this.colorsLand[index];
     }
+
+    if (!color) {
+      return 0x000000;
+    }
     
     return colorToNumber([
       Math.round(color[0] * 255),
