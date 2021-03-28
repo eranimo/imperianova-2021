@@ -191,7 +191,7 @@ export const WorldViewer = () => {
   }, [width, height]);
 
   return (
-    <div>
+    <div style={{ overflow: 'hidden' }}>
       <canvas
         ref={worldMapRef}
         style={{
