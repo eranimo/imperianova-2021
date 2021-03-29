@@ -56,6 +56,12 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Height" value={height} />
     );
   }],
+  [MapModeType.Rainfall, ({ hexIndex, gameMap }) => {
+    const height = useGameMapState(gameMap, hexIndex, 'rainfall');
+    return (
+      <TooltipValue label="Rainfall" value={height} />
+    );
+  }],
   [MapModeType.Population, ({ hexIndex, gameMap }) => {
     const population = useGameMapState(gameMap, hexIndex, 'population');
     return (

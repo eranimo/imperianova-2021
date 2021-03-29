@@ -51,6 +51,7 @@ export class World {
 
   terrain: ndarray;
   heightmap: ndarray;
+  rainfall: ndarray;
   terrainUpdates$: Subject<unknown>;
 
   rivers: Edge[][];
@@ -76,6 +77,7 @@ export class World {
     world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap);
+    world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
     return world;
   }
@@ -99,6 +101,9 @@ export class World {
     const arrayDim = [gridSize.width, gridSize.height];
     const terrainBuffer = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * arraySize);
     this.terrain = ndarray(new Uint32Array(terrainBuffer), arrayDim);
+
+    const rainfallBuffer = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * arraySize);
+    this.rainfall = ndarray(new Uint32Array(rainfallBuffer), arrayDim);
 
     const heightBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
     this.heightmap = ndarray(new Float32Array(heightBuffer), arrayDim);
@@ -178,6 +183,10 @@ export class World {
     });
     console.log('ecoregions:', orderBy(this.ecoregions, 'size', 'desc'));
     console.timeEnd('identify ecoregions');
+  }
+
+  setWorldRainfall(rainfall: Int32Array) {
+    (this.rainfall.data as Uint32Array).set(rainfall, 0);
   }
 
   setWorldRivers(riverData: number[][]) {
@@ -329,33 +338,6 @@ export class World {
       hex.x === 0 || hex.x === (this.gridSize.width - 1) ||
       hex.y === 0 || hex.y === (this.gridSize.height - 1)
     );
-  
-    // const { x, y } = hex;
-    // const se_hex = this.getHexNeighbor(x, y, Direction.SE);
-    // if (se_hex === null) {
-    //   return true;
-    // }
-    // const ne_hex = this.getHexNeighbor(x, y, Direction.NE);
-    // if (ne_hex === null) {
-    //   return true;
-    // }
-    // const n_hex = this.getHexNeighbor(x, y, Direction.N);
-    // if (n_hex === null) {
-    //   return true;
-    // }
-    // const nw_hex = this.getHexNeighbor(x, y, Direction.NW);
-    // if (nw_hex === null) {
-    //   return true;
-    // }
-    // const sw_hex = this.getHexNeighbor(x, y, Direction.SW);
-    // if (sw_hex === null) {
-    //   return true;
-    // }
-    // const s_hex = this.getHexNeighbor(x, y, Direction.S);
-    // if (s_hex === null) {
-    //   return true;
-    // }
-    // return false;
   }
 
   *hexNeighbors(hex: Hex) {
@@ -451,6 +433,10 @@ export class World {
 
   getTerrain(hex: Hex) {
     return this.getTerrainForCoord(hex.x, hex.y);
+  }
+
+  getRainfall(hex: Hex) {
+    return this.rainfall.get(hex.x, hex.y);
   }
 
   getTerrainForCoord(x: number, y: number): TerrainType {

@@ -68,6 +68,32 @@ class HeightMapMode implements MapMode {
   }
 }
 
+class RainfallMapMode implements MapMode {
+  title = 'Rainfall';
+  displayRivers = true;
+  colors: [number, number, number, number][];
+
+  init(manager: WorldMapManager) {
+    this.colors = colormap({
+      colormap: 'YiGnBu',
+      format: 'float',
+      nshades: 50,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const rainfall = manager.getHexField(index, 'rainfall');
+    const v = Math.round((rainfall / 9000) * 50);
+    const color = this.colors[v];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
 class PopulationMapMode implements MapMode {
   title = 'Population';
   displayRivers = false;
@@ -110,11 +136,13 @@ class PopulationMapMode implements MapMode {
 export enum MapModeType {
   Terrain,
   Height,
+  Rainfall,
   Population,
 }
 
 export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.Terrain, new TerrainMapMode()],
   [MapModeType.Height, new HeightMapMode()],
+  [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],
 ]);

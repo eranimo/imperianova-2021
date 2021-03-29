@@ -21,6 +21,7 @@ export type WorldData = {
   terrain: Uint32Array,
   heightmap: Uint8ClampedArray,
   rivers: number[][],
+  rainfall: Int32Array,
 }
 
 function removeDepressions(
@@ -118,6 +119,8 @@ export class WorldGenerator {
   seed: number;
   world: World;
   options: WorldGeneratorOptions;
+  hex3DCoords: Map<Hex, [x: number, y: number, z: number]>;
+  rng: () => number;
 
   @logGroupTime('generate', true)
   generate(options: WorldGeneratorOptions) {
@@ -126,12 +129,15 @@ export class WorldGenerator {
     this.world.setWorldSize(options.size);
     this.size = this.world.gridSize;
     this.seed = options.seed;
+    this.rng = Alea(this.seed);
     const { terrain, heightmap } = this.generateTerrain();
     const rivers = this.generateRivers();
+    const rainfall = this.generateRainfall();
     const worldData: WorldData = {
       options,
       terrain,
       heightmap,
+      rainfall,
       rivers,
     };
     this.world.setWorldData(worldData);
@@ -151,10 +157,10 @@ export class WorldGenerator {
     const heightmapData = new Uint8ClampedArray(heightBuffer)
     const heightmap = ndarray(heightmapData, arrayDim);
 
-    const rng = Alea(this.seed);
-    const noise = new SimplexNoise(rng);
+    const noise = new SimplexNoise(this.rng);
     const { sealevel } = this.options;
     const hex3DCoords = new Map<Hex, [x: number, y: number, z: number]>();
+    this.hex3DCoords = hex3DCoords;
     this.world.hexgrid.forEach((hex, index) => {
       const { lat, long } = this.world.getHexCoordinate(hex);
       const inc = ((lat + 90) / 180) * Math.PI;
@@ -264,6 +270,34 @@ export class WorldGenerator {
       terrain: terrainData,
       heightmap: heightmapData,
     };
+  }
+
+  @logGroupTime('generate rainfall')
+  generateRainfall() {
+    const { width, height } = this.size;
+    const arraySize = width * height;
+    const arrayDim = [width, height];
+    const rainfallBuffer = new ArrayBuffer(Int32Array.BYTES_PER_ELEMENT * arraySize);
+    const rainfallmapData = new Int32Array(rainfallBuffer)
+    const rainfallmap = ndarray(rainfallmapData, arrayDim);
+
+    const noise = new SimplexNoise(this.rng);
+
+    this.world.hexgrid.forEach((hex, index) => {
+      if (this.world.isLand(hex)) {
+        const { lat, long } = this.world.getHexCoordinate(hex);
+        const [nx, ny, nz] = this.hex3DCoords.get(hex);
+        const rainfall = (octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 5, 0.75) + 1) / 2;
+        rainfallmap.set(hex.x, hex.y, (rainfall * rainfall * rainfall) * 9000);
+      } else {
+        rainfallmap.set(hex.x, hex.y, 0);
+      }
+    });
+    console.log('rainfall', rainfallmap);
+
+    this.world.setWorldRainfall(rainfallmapData);
+
+    return rainfallmapData;
   }
 
   @logGroupTime('generateRivers')

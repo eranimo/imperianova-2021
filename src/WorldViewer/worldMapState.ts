@@ -5,6 +5,7 @@ import { Direction } from '../types';
 export type WorldMapStateHex = {
   index: number,
   terrainType: number,
+  rainfall: number,
   population: number,
   height: number,
   coordX: number,
@@ -33,6 +34,7 @@ export const WorldMapState = MapViewMixin({
         properties: {
           index: { type: 'integer', btype: 'uint32' },
           terrainType: { type: 'integer', btype: 'uint32' },
+          rainfall: { type: 'integer', btype: 'uint32' },
           population: { type: 'integer', btype: 'uint32' },
           height: { type: 'integer', btype: 'uint32' },
           coordX: { type: 'integer', btype: 'uint32' },
