@@ -11,6 +11,7 @@ export enum TerrainType {
   RIVER = 9, // special
   RIVER_MOUTH = 10, // special
   RIVER_SOURCE = 11, // special
+  LAKE = 12,
   __LENGTH,
 }
 
@@ -30,6 +31,7 @@ export const terrainTypeIndexOrder = [
   TerrainType.TAIGA,
   TerrainType.TUNDRA,
   TerrainType.GLACIAL,
+  TerrainType.LAKE,
   TerrainType.RIVER,
   TerrainType.RIVER_MOUTH,
   TerrainType.RIVER_SOURCE,
@@ -47,6 +49,7 @@ export const terrainColors: TerrainTypeMap<number> = {
   [TerrainType.TAIGA]: 0x006259,
   [TerrainType.TUNDRA]: 0x96D1C3,
   [TerrainType.GLACIAL]: 0xFAFAFA,
+  [TerrainType.LAKE]: 0x4772b3,
   [TerrainType.RIVER]: 0x3F78CB,
   [TerrainType.RIVER_MOUTH]: 0x3F78CB,
   [TerrainType.RIVER_SOURCE]: 0x3F78CB,
@@ -62,6 +65,7 @@ export const terrainTypeTitles: TerrainTypeMap<string> = {
   [TerrainType.TAIGA]: 'Taiga',
   [TerrainType.TUNDRA]: 'Tundra',
   [TerrainType.GLACIAL]: 'Glacial',
+  [TerrainType.LAKE]: 'Lake',
   [TerrainType.RIVER]: 'River',
   [TerrainType.RIVER_MOUTH]: 'River Mouth',
   [TerrainType.RIVER_SOURCE]: 'River Source',
@@ -73,5 +77,6 @@ export const terrainTransitions: Partial<Record<TerrainType, TerrainType[]>> = {
   [TerrainType.DESERT]: [TerrainType.GRASSLAND, TerrainType.FOREST],
   [TerrainType.TUNDRA]: [TerrainType.GLACIAL, TerrainType.TAIGA],
   [TerrainType.TAIGA]: [TerrainType.GRASSLAND, TerrainType.GLACIAL],
+  [TerrainType.LAKE]: [TerrainType.GRASSLAND, TerrainType.FOREST, TerrainType.DESERT, TerrainType.TAIGA, TerrainType.TUNDRA],
   [TerrainType.OCEAN]: [TerrainType.COAST],
 };

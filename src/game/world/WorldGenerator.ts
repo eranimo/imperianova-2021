@@ -23,6 +23,96 @@ export type WorldData = {
   rivers: number[][],
 }
 
+function removeDepressions(
+  world: World,
+  heightmap: ndarray,
+  waterheight: ndarray,
+  size: Size,
+  sealevel: number,
+) {
+  const { width, height } = size;
+  // copy heightmap into watermap
+  world.hexgrid.forEach(hex => {
+    waterheight.set(hex.x, hex.y, heightmap.get(hex.x, hex.y));
+  });
+
+  type Item = { x: number, y: number, height: number };
+  const open = new PriorityQueue<Item>((a, b) => {
+    if (a.height < b.height) {
+      return 1;
+    } else if (a.height > b.height) {
+      return -1;
+    }
+    return 0;
+  });
+  const pit = new Queue<Item>();
+  const closed = new Grid2D<boolean>(width, height);
+  closed.fill(false);
+
+  // add hexes on edge of map to open queue
+  world.hexgrid.forEach((hex, index) => {
+    if (world.isMapEdge(hex)) {
+      open.add({ x: hex.x, y: hex.y, height: heightmap.get(hex.x, hex.y) });
+      closed.set(hex.x, hex.y, true);
+    }
+  });
+
+  // create waterheight grid
+  while (!open.isEmpty() || !pit.isEmpty()) {
+    let cell: Item;
+    if (!pit.isEmpty()) {
+      cell = pit.dequeue();
+    } else {
+      cell = open.dequeue();
+    }
+
+    const { x: cx, y: cy } = cell;
+
+    for (const neighbor of world.hexNeighbors(world.getHex(cx, cy))) {
+      const { x: nx, y: ny } = neighbor;
+      if (closed.get(nx, ny) === true) continue;
+      closed.set(nx, ny, true);
+      if (waterheight.get(nx, ny) <= waterheight.get(cx, cy)) {
+        waterheight.set(nx, ny, waterheight.get(cx, cy));
+        pit.add({ x: nx, y: ny, height: waterheight.get(nx, ny) });
+      } else {
+        open.add({ x: nx, y: ny, height: waterheight.get(nx, ny) });
+      }
+    }
+  }
+
+  // identify depressions
+  const depressionCellsGrid = ndarray(new Uint8ClampedArray(width * height), [width, height]);
+  depressionCellsGrid.data.fill(0);
+  let countDepressionCells = 0;
+  world.hexgrid.forEach((hex, index) => {
+    if (
+      waterheight.get(hex.x, hex.y) > heightmap.get(hex.x, hex.y)
+      && waterheight.get(hex.x, hex.y) >= sealevel
+    ) {
+      depressionCellsGrid.set(hex.x, hex.y, 1);
+      countDepressionCells++;
+    }
+  });
+  // console.log('countDepressionCells', countDepressionCells);
+
+  const visited = new Set<Hex>();
+  let depressions: Coord[][] = [];
+  world.hexgrid.forEach((hex, index) => {
+    if (depressionCellsGrid.get(hex.x, hex.y) === 1 && visited.has(hex) === false) {
+      const depression = world.floodFill(
+        hex,
+        (h1, h2) => depressionCellsGrid.get(h2.x, h2.y) === 1,
+        visited,
+      )
+      depressions.push(Array.from(depression).map(hex => [hex.x, hex.y]));
+    }
+  });
+
+  // console.log('depressions', sortBy(depressions, i => i.length));
+  return depressions;
+}
+
 export class WorldGenerator {
   size: Size;
   seed: number;
@@ -80,110 +170,33 @@ export class WorldGenerator {
     });
 
     // REMOVE DEPRESSIONS
-
-    // copy heightmap into watermap
     const waterheight = ndarray(new Uint8ClampedArray(width * height), arrayDim);
-    this.world.hexgrid.forEach(hex => {
-      waterheight.set(hex.x, hex.y, heightmap.get(hex.x, hex.y));
-    });
+    let depressions = removeDepressions(this.world, heightmap, waterheight, this.size, sealevel);
 
-    type Item = { x: number, y: number, height: number };
-    const open = new PriorityQueue<Item>((a, b) => {
-      if (a.height < b.height) {
-        return 1;
-      } else if (a.height > b.height) {
-        return -1;
-      }
-      return 0;
-    });
-    const pit = new Queue<Item>();
-    const closed = new Grid2D<boolean>(this.size.width, this.size.height);
-    closed.fill(false);
-
-    // add hexes on edge of map to open queue
-    this.world.hexgrid.forEach((hex, index) => {
-      if (this.world.isMapEdge(hex)) {
-        open.add({ x: hex.x, y: hex.y, height: heightmap.get(hex.x, hex.y) });
-        closed.set(hex.x, hex.y, true);
-      }
-    });
-    console.log('map edge cells', open.size());
-
-    // create waterheight grid
-    while (!open.isEmpty() || !pit.isEmpty()) {
-      let cell: Item;
-      if (!pit.isEmpty()) {
-        cell = pit.dequeue();
-      } else {
-        cell = open.dequeue();
-      }
-
-      const { x: cx, y: cy } = cell;
-
-      for (const neighbor of this.world.hexNeighbors(this.world.getHex(cx, cy))) {
-        const { x: nx, y: ny } = neighbor;
-        if (closed.get(nx, ny) === true) continue;
-        closed.set(nx, ny, true);
-        if (waterheight.get(nx, ny) <= waterheight.get(cx, cy)) {
-          waterheight.set(nx, ny, waterheight.get(cx, cy));
-          pit.add({ x: nx, y: ny, height: waterheight.get(nx, ny) });
-        } else {
-          open.add({ x: nx, y: ny, height: waterheight.get(nx, ny) });
-        }
+    const fillDepression = (depression: Coord[]) => {
+      for (const [x, y] of depression) {
+        const newHeight = waterheight.get(x, y);
+        heightmap.set(x, y, newHeight);
       }
     }
-    console.log('waterheight', waterheight);
 
-    // this.world.hexgrid.forEach(hex => {
-    //   heightmap.set(hex.x, hex.y, waterheight.get(hex.x, hex.y));
-    // });
-
-    // identify depressions
-    const depressionCellsGrid = ndarray(new Uint8ClampedArray(width * height), [width, height]);
-    depressionCellsGrid.data.fill(0);
-    let countDepressionCells = 0;
-    this.world.hexgrid.forEach((hex, index) => {
-      if (
-        waterheight.get(hex.x, hex.y) > heightmap.get(hex.x, hex.y)
-        && waterheight.get(hex.x, hex.y) >= sealevel
-      ) {
-        depressionCellsGrid.set(hex.x, hex.y, 1);
-        countDepressionCells++;
-      }
-    });
-    console.log('depressionCellsGrid', depressionCellsGrid);
-    console.log('countDepressionCells', countDepressionCells);
-
-    const visited = ndarray(new Uint8ClampedArray(width * height), [width, height]);
-    visited.data.fill(0);
-    // let visited = new Set<Hex>();
-    let depressions: Coord[][] = [];
-    this.world.hexgrid.forEach((hex, index) => {
-      if (depressionCellsGrid.get(hex.x, hex.y) === 1 && visited.get(hex.x, hex.y) === 0) {
-        const depression = this.world.bfs(
-          visited,
-          (i) => depressionCellsGrid.get(i.x, i.y) === 1,
-          hex,
-        );
-        // if (depression.size > 1000) return;
-        // for (const hex of depression) {
-        //   heightmap.set(hex.x, hex.y, 244);
-        // }
-        depressions.push(depression);
-      }
-    });
-
-    function fillDepression(depression: number[][]) {
+    const reverseDepression = (depression: Coord[]) => {
       for (const [x, y] of depression) {
         const newHeight = waterheight.get(x, y) + (waterheight.get(x, y) - heightmap.get(x, y));
         heightmap.set(x, y, newHeight);
       }
     }
-    console.log('depressions', sortBy(depressions, i => i.length));
 
     for (const depression of depressions) {
-      fillDepression(depression);
+      if (depression.length > 1) {
+        reverseDepression(depression);
+      } else {
+        fillDepression(depression);
+      }
     }
+
+    depressions = removeDepressions(this.world, heightmap, waterheight, this.size, sealevel);
+
 
     // CALCULATE TERRAIN
     this.world.hexgrid.forEach((hex, index) => {
@@ -227,6 +240,7 @@ export class WorldGenerator {
         }
       }
     });
+  
     // any ocean hex with land neighbors is a coast hex
     this.world.hexgrid.forEach((hex, index) => {
       if (!this.world.isLand(hex)) {
@@ -238,6 +252,12 @@ export class WorldGenerator {
         }
       }
     });
+
+    for (const depression of depressions) {
+      for (const [x, y] of depression) {
+        terrain.set(x, y, TerrainType.LAKE);
+      }
+    }
 
     this.world.setWorldTerrain(terrainData, heightmapData);
     return {
@@ -321,7 +341,7 @@ export class WorldGenerator {
     console.time('build rivers');
     const rng = Alea(this.seed);
     const rivers = coastlineEdges
-      .filter(i => rng() < 0.33)
+      // .filter(i => rng() < 0.33)
       .map(edge => buildRiver(edge))
       .filter(edges => edges.length > 0);
     const riverData = rivers.map(riverEdges => riverEdges.map(edge => edge.id));
