@@ -22,6 +22,46 @@ class TerrainMapMode implements MapMode {
   }
 }
 
+class DistanceToCoastMapMode implements MapMode {
+  title = 'Distance to coast';
+  displayRivers = false;
+  colors: [number, number, number, number][];
+  maxDistance: number;
+  manager: WorldMapManager;
+
+  init(manager: WorldMapManager) {
+    this.manager = manager;
+    this.maxDistance = 0;
+    for (let i = 0; i < manager.hexLength; i++) {
+      const distanceToCoast = manager.getHexField(i, 'distanceToCoast');
+      if (distanceToCoast !== undefined) {
+        this.maxDistance = Math.max(this.maxDistance, distanceToCoast);
+      }
+    }
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 50,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const distanceToCoast = this.manager.getHexField(index, 'distanceToCoast');
+    const v = Math.round((distanceToCoast / this.maxDistance) * 50);
+    const color = this.colors[v];
+
+    if (!color) {
+      return 0x000000;
+    }
+    
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
 class HeightMapMode implements MapMode {
   title = 'Height';
   displayRivers = false;
@@ -135,6 +175,7 @@ class PopulationMapMode implements MapMode {
 
 export enum MapModeType {
   Terrain,
+  DistanceToCoast,
   Height,
   Rainfall,
   Population,
@@ -142,6 +183,7 @@ export enum MapModeType {
 
 export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.Terrain, new TerrainMapMode()],
+  [MapModeType.DistanceToCoast, new DistanceToCoastMapMode()],
   [MapModeType.Height, new HeightMapMode()],
   [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],

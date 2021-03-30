@@ -3,7 +3,7 @@ import ndarray from 'ndarray';
 import SimplexNoise from 'simplex-noise';
 import { PriorityQueue, Queue } from 'typescript-collections';
 import { Size, Coord } from '../../types';
-import { floodFill, logGroupTime, octaveNoise3D } from '../../utils';
+import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats } from '../../utils';
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
 import { Grid2D } from '../../utils/Grid2D';
@@ -22,6 +22,7 @@ export type WorldData = {
   heightmap: Uint8ClampedArray,
   rivers: number[][],
   rainfall: Int32Array,
+  distanceToCoast: Int32Array,
 }
 
 function removeDepressions(
@@ -130,7 +131,7 @@ export class WorldGenerator {
     this.size = this.world.gridSize;
     this.seed = options.seed;
     this.rng = Alea(this.seed);
-    const { terrain, heightmap } = this.generateTerrain();
+    const { terrain, heightmap, distanceToCoast } = this.generateTerrain();
     const rivers = this.generateRivers();
     const rainfall = this.generateRainfall();
     const worldData: WorldData = {
@@ -139,12 +140,13 @@ export class WorldGenerator {
       heightmap,
       rainfall,
       rivers,
+      distanceToCoast,
     };
     this.world.setWorldData(worldData);
     return this.world;
   }
 
-  @logGroupTime('generateTerrain')
+  @logGroupTime('generate terrain')
   generateTerrain() {
     const { width, height } = this.size;
     const arraySize = width * height;
@@ -246,18 +248,6 @@ export class WorldGenerator {
         }
       }
     });
-  
-    // any ocean hex with land neighbors is a coast hex
-    this.world.hexgrid.forEach((hex, index) => {
-      if (!this.world.isLand(hex)) {
-        for (const neighbor of this.world.hexNeighbors(hex)) {
-          if (this.world.isLand(neighbor)) {
-            terrain.set(hex.x, hex.y, TerrainType.COAST);
-            break;
-          }
-        }
-      }
-    });
 
     for (const depression of depressions) {
       for (const [x, y] of depression) {
@@ -265,21 +255,52 @@ export class WorldGenerator {
       }
     }
 
-    this.world.setWorldTerrain(terrainData, heightmapData);
+    const distanceToCoastData = new Int32Array(new ArrayBuffer(Int32Array.BYTES_PER_ELEMENT * arraySize))
+    const distanceToCoast = ndarray(distanceToCoastData, arrayDim);
+
+    const queue = new Queue<[hex: Hex, count: number]>();
+    const visited = new Grid2D(width, height);
+    visited.fill(0);
+    this.world.hexgrid.forEach((hex, index) => {
+      if (heightmap.get(hex.x, hex.y) >= sealevel) {
+        for (const neighbor of this.world.hexNeighbors(hex)) {
+          if (heightmap.get(neighbor.x, neighbor.y) < sealevel) {
+            queue.add([hex, 0]);
+            visited.set(hex.x, hex.y, 1);
+            return;
+          }
+        }
+      }
+    });
+    console.log('coastal land cell count', queue.size());
+
+    while (!queue.isEmpty()) {
+      const [hex, count] = queue.dequeue();
+      distanceToCoast.set(hex.x, hex.y, count);
+
+      for (const neighbor of this.world.hexNeighbors(hex)) {
+        if (visited.get(neighbor.x, neighbor.y) === 1) continue;
+        visited.set(neighbor.x, neighbor.y, 1);
+        queue.add([neighbor, count + 1]);
+      }
+    }
+    console.log('distance to coast', distanceToCoast);
+    console.log('distance to coast stats', ndarrayStats(distanceToCoast));
+
+    this.world.setWorldTerrain(terrainData, heightmapData, distanceToCoastData);
     return {
       terrain: terrainData,
       heightmap: heightmapData,
+      distanceToCoast: distanceToCoastData,
     };
   }
 
   @logGroupTime('generate rainfall')
   generateRainfall() {
     const { width, height } = this.size;
-    const arraySize = width * height;
-    const arrayDim = [width, height];
-    const rainfallBuffer = new ArrayBuffer(Int32Array.BYTES_PER_ELEMENT * arraySize);
+    const rainfallBuffer = new ArrayBuffer(Int32Array.BYTES_PER_ELEMENT * width * height);
     const rainfallmapData = new Int32Array(rainfallBuffer)
-    const rainfallmap = ndarray(rainfallmapData, arrayDim);
+    const rainfallmap = ndarray(rainfallmapData, [width, height]);
 
     const noise = new SimplexNoise(this.rng);
 

@@ -57,6 +57,7 @@ export class GameMap {
         index: hex.index,
         terrainType: game.world.getTerrain(hex),
         rainfall: game.world.getRainfall(hex),
+        distanceToCoast: game.world.distanceToCoast.get(hex.x, hex.y),
         population: 0,
         height: game.world.getHexHeight(hex),
         coordX: hex.x,

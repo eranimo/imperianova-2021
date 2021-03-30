@@ -52,6 +52,7 @@ export class World {
   terrain: ndarray;
   heightmap: ndarray;
   rainfall: ndarray;
+  distanceToCoast: ndarray;
   terrainUpdates$: Subject<unknown>;
 
   rivers: Edge[][];
@@ -76,7 +77,7 @@ export class World {
     const world = new World();
     world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
-    world.setWorldTerrain(worldData.terrain, worldData.heightmap);
+    world.setWorldTerrain(worldData.terrain, worldData.heightmap, worldData.distanceToCoast);
     world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
     return world;
@@ -108,6 +109,9 @@ export class World {
     const heightBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
     this.heightmap = ndarray(new Float32Array(heightBuffer), arrayDim);
 
+    const distanceToCoastBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * arraySize);
+    this.distanceToCoast = ndarray(new Int32Array(distanceToCoastBuffer), arrayDim);
+
     this.hexNeighborDirections = new Map();
     this.hexRoads = new Map();
 
@@ -134,9 +138,11 @@ export class World {
   public setWorldTerrain(
     terrain: Uint32Array,
     heightmap: Uint8ClampedArray,
+    distanceToCoast: Int32Array,
   ) {
     (this.terrain.data as Uint32Array).set(terrain, 0);
     (this.heightmap.data as Uint8ClampedArray).set(heightmap, 0);
+    (this.distanceToCoast.data as Int32Array).set(distanceToCoast, 0);
 
     // identify landmasses
     console.time('identify landmasses');
@@ -308,6 +314,11 @@ export class World {
     return [p.x, p.y];
   }
 
+  /**
+   * Returns latitude in (-90 to 90) and longitude in (-180 to 180)
+   * @param hex Hex
+   * @returns Latitude and Longitude
+   */
   getHexCoordinate(hex: Hex) {
     const long = ((hex.x / this.gridSize.width) * 360) - 180;
     const lat = ((-hex.y / this.gridSize.height) * 180) + 90;

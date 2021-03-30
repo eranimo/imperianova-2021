@@ -1,6 +1,8 @@
 import ndarray from 'ndarray';
 import { CoordArray, Coord, ColorArray } from './types';
 import { clamp } from 'lodash';
+import ops from 'ndarray-ops';
+import * as Stats from 'simple-statistics';
 
 
 export function octaveNoise3D(
@@ -382,4 +384,19 @@ export function colorShiftLightness(color: ColorArray, amount: number): ColorArr
     clamp(Math.round(color[1] + amount), 0, 255),
     clamp(Math.round(color[2] + amount), 0, 255),
   ];
+}
+
+export function ndarrayStats(ndarray: ndarray) {
+  const data = Array.from(ndarray.data);
+  const quantiles = {};
+  for (let q = 0; q <= 100; q += 1) {
+    quantiles[q] = Stats.quantile(data, q / 100);
+  }
+  return {
+    array: ndarray,
+    avg: ops.sum(ndarray) / (ndarray.shape[0] * ndarray.shape[0]),
+    max: ops.sup(ndarray),
+    min: ops.inf(ndarray),
+    quantiles
+  };
 }
