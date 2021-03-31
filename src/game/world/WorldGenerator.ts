@@ -7,7 +7,7 @@ import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats } from '../../util
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
 import { Grid2D } from '../../utils/Grid2D';
-import { sortBy } from 'lodash';
+import { inRange, sortBy } from 'lodash';
 
 
 export type WorldGeneratorOptions = {
@@ -23,6 +23,8 @@ export type WorldData = {
   rivers: number[][],
   rainfall: Int32Array,
   distanceToCoast: Int32Array,
+  pressureJanuary: Float32Array,
+  pressureJuly: Float32Array,
 }
 
 function removeDepressions(
@@ -134,6 +136,7 @@ export class WorldGenerator {
     const { terrain, heightmap, distanceToCoast } = this.generateTerrain();
     const rivers = this.generateRivers();
     const rainfall = this.generateRainfall();
+    const { pressureJanuary, pressureJuly } = this.generatePressure();
     const worldData: WorldData = {
       options,
       terrain,
@@ -141,6 +144,8 @@ export class WorldGenerator {
       rainfall,
       rivers,
       distanceToCoast,
+      pressureJanuary,
+      pressureJuly,
     };
     this.world.setWorldData(worldData);
     return this.world;
@@ -171,7 +176,7 @@ export class WorldGenerator {
       const ny = 1 * Math.sin(inc) * Math.sin(azi);
       const nz = 1 * Math.cos(inc);
       hex3DCoords.set(hex, [nx, ny, nz]);
-      const raw = octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5);
+      const raw = octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 7, 0.5, 0.5);
       const value = (raw + 1) / 2;
       const height = value * 255;
       heightmap.set(hex.x, hex.y, height);
@@ -292,6 +297,159 @@ export class WorldGenerator {
       terrain: terrainData,
       heightmap: heightmapData,
       distanceToCoast: distanceToCoastData,
+    };
+  }
+
+  @logGroupTime('generate pressure')
+  generatePressure() {
+    const { width, height } = this.size;
+    const { sealevel } = this.options;
+    const pressureJanuaryData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const pressureJanuary = ndarray(pressureJanuaryData, [width, height]);
+    const pressureJulyData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const pressureJuly = ndarray(pressureJulyData, [width, height]);
+
+    // pressure is from -30 to 30
+
+    const getLatitudeGradient = (latitude: number, center: number, spread: number) => {
+      const distanceToCenter = Math.abs(center - latitude);
+      return 1 - (distanceToCenter / spread);
+    };
+
+    const decidePressure = (
+      hex: Hex,
+      decideColdSeason: (lat: number) => boolean
+    ) => {
+      const { lat } = this.world.getHexCoordinate(hex);
+      const isInland = this.world.isLand(hex);
+      const MAX_DIST_TO_COAST = 30;
+      const distanceToCoastRaw = Math.min(30, this.world.distanceToCoast.get(hex.x, hex.y)) / MAX_DIST_TO_COAST;
+      const distanceToCoast = MAX_DIST_TO_COAST * (1 - Math.pow(1 - distanceToCoastRaw, 3));
+      let isColdSeason = decideColdSeason(lat);
+      const absLat = Math.abs(lat);
+
+      let pressure: number = 1004;
+      const HIGH_PRESSURE_SPREAD = 15;
+      const LOW_PRESSURE_SPREAD = 10;
+      const LAND_HIGH_RESSURE_MAX = 10;
+      const LAND_LOW_RESSURE_MAX = 2;
+      const OCEAN_HIGH_PRESSURE_MAX = 10;
+      const OCEAN_LOW_PRESSURE_MAX = 5;
+
+      if (inRange(lat, -25, 25)) {
+        // slightly high pressure around tropics
+        // slightly less over land
+        const latitudeComponent = 0.5 + ((absLat / 25) / 2);
+        if (isInland) {
+          // less pressure further inland
+          const v = 1 - (distanceToCoast / MAX_DIST_TO_COAST);
+          pressure += 5 * v * latitudeComponent;
+        } else {
+          // more pressure further out to sea
+          const v = (distanceToCoast / MAX_DIST_TO_COAST);
+          pressure += (5 + (10 * v)) * latitudeComponent;
+        }
+      }
+
+      if (isInland) {
+        // land
+        const latitudeComponent = getLatitudeGradient(absLat, 45, 45);
+        if (isColdSeason) {
+          // High pressure systems develop over the continents (including the poles). Larger continent = higher pressure.
+          // No low pressure overland.
+          pressure += (latitudeComponent * distanceToCoast * 0.10) * (latitudeComponent * LAND_HIGH_RESSURE_MAX);
+        } else {
+          // hot temperatures prevent the formation of high pressure systems.
+          // large landmasses become hot and the low pressure can cover most of the continent.
+          pressure -= (latitudeComponent * distanceToCoast * 0.10) * (latitudeComponent * LAND_LOW_RESSURE_MAX);
+        }
+      } else {
+        // // ocean
+        if (isColdSeason) {
+          // High pressure 30° in a more or less continuous line
+          // Low pressure centered around 55°
+          if (
+            inRange(absLat, 30 - HIGH_PRESSURE_SPREAD, 30 + HIGH_PRESSURE_SPREAD)
+          ) {
+            const latitudeComponent = getLatitudeGradient(absLat, 30, HIGH_PRESSURE_SPREAD);
+            pressure += (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_HIGH_PRESSURE_MAX);
+          } else if (
+            inRange(absLat, 55 - LOW_PRESSURE_SPREAD, 55 + LOW_PRESSURE_SPREAD)
+          ) {
+            const latitudeComponent = getLatitudeGradient(absLat, 55, LOW_PRESSURE_SPREAD);
+            pressure -= (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_LOW_PRESSURE_MAX);
+          }
+        } else {
+          // High pressure: 35° separated, mostly on the eastern side of the oceans
+          // Tend to be located on the eastern side, close to the continents because it’s where the cold currents are flowing.
+          // In summer, the high pressure system breaks apart as the continents are affected by low pressure systems due to hotter temperatures.
+
+          // Low pressure centers move 5 to 10° closer to the poles. They tend to disappear over the land.
+          if (
+            inRange(absLat, 35 - HIGH_PRESSURE_SPREAD, 35 + HIGH_PRESSURE_SPREAD)
+          ) {
+            const latitudeComponent = getLatitudeGradient(absLat, 35, HIGH_PRESSURE_SPREAD);
+            pressure += (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_HIGH_PRESSURE_MAX);
+          } else if (
+            inRange(absLat, 60 - LOW_PRESSURE_SPREAD, 60 + LOW_PRESSURE_SPREAD)
+          ) {
+            const latitudeComponent = getLatitudeGradient(absLat, 60, LOW_PRESSURE_SPREAD);
+            pressure -= (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_LOW_PRESSURE_MAX);
+          }
+        }
+      }
+
+      return pressure;
+    }
+
+    this.world.hexgrid.forEach((hex, index) => {
+      // in january it's cold season in the north
+      const januaryPressure = decidePressure(hex, lat => lat > 0);
+      // in july its cold season in the south
+      const julyPressure = decidePressure(hex, lat => lat < 0);
+
+      pressureJanuary.set(hex.x, hex.y, januaryPressure);
+      pressureJuly.set(hex.x, hex.y, julyPressure);
+    });
+
+    // add randomness
+    const noise = new SimplexNoise(this.rng);
+    this.world.hexgrid.forEach((hex, index) => {
+      const [nx, ny, nz] = this.hex3DCoords.get(hex);
+      let january = pressureJanuary.get(hex.x, hex.y);
+      let july = pressureJuly.get(hex.x, hex.y);
+      january += 3 * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
+      july += 3 * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
+      pressureJanuary.set(hex.x, hex.y, january);
+      pressureJuly.set(hex.x, hex.y, july);
+    });
+
+    // blur pressure maps
+    for (let i = 0; i < 10; i++) {
+      this.world.hexgrid.forEach((hex, index) => {
+        let january = 0;
+        let july = 0;
+        let neighborCount = 0;
+        for (const neighbor of this.world.hexNeighbors(hex)) {
+          january += pressureJanuary.get(neighbor.x, neighbor.y);
+          july += pressureJuly.get(neighbor.x, neighbor.y);
+          neighborCount++;
+        }
+        pressureJanuary.set(hex.x, hex.y, january / neighborCount);
+        pressureJuly.set(hex.x, hex.y, july / neighborCount);
+
+      });
+    }
+
+
+    console.log('pressure january', ndarrayStats(pressureJanuary));
+    console.log('pressure july', ndarrayStats(pressureJuly));
+
+    this.world.setWorldPressure(pressureJanuaryData, pressureJulyData);
+
+    return {
+      pressureJanuary: pressureJanuaryData,
+      pressureJuly: pressureJulyData,
     };
   }
 

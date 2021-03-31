@@ -62,6 +62,18 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Distance to coast" value={distanceToCoast} />
     );
   }],
+  [MapModeType.PressureJanuary, ({ hexIndex, gameMap }) => {
+    const pressure = useGameMapState(gameMap, hexIndex, 'pressureJanuary');
+    return (
+      <TooltipValue label="Pressure in January" value={Math.round(pressure)} />
+    );
+  }],
+  [MapModeType.PressureJuly, ({ hexIndex, gameMap }) => {
+    const pressure = useGameMapState(gameMap, hexIndex, 'pressureJuly');
+    return (
+      <TooltipValue label="Pressure in July" value={Math.round(pressure)} />
+    );
+  }],
   [MapModeType.Rainfall, ({ hexIndex, gameMap }) => {
     const height = useGameMapState(gameMap, hexIndex, 'rainfall');
     return (

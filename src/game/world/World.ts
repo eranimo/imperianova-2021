@@ -53,6 +53,9 @@ export class World {
   heightmap: ndarray;
   rainfall: ndarray;
   distanceToCoast: ndarray;
+  pressureJanuary: ndarray;
+  pressureJuly: ndarray;
+
   terrainUpdates$: Subject<unknown>;
 
   rivers: Edge[][];
@@ -78,6 +81,7 @@ export class World {
     world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap, worldData.distanceToCoast);
+    world.setWorldPressure(worldData.pressureJanuary, worldData.pressureJuly);
     world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
     return world;
@@ -111,6 +115,12 @@ export class World {
 
     const distanceToCoastBuffer = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * arraySize);
     this.distanceToCoast = ndarray(new Int32Array(distanceToCoastBuffer), arrayDim);
+
+    const pressureJanuaryBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
+    this.pressureJanuary = ndarray(new Float32Array(pressureJanuaryBuffer), arrayDim);
+
+    const pressureJulyBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
+    this.pressureJuly = ndarray(new Float32Array(pressureJulyBuffer), arrayDim);
 
     this.hexNeighborDirections = new Map();
     this.hexRoads = new Map();
@@ -193,6 +203,14 @@ export class World {
 
   setWorldRainfall(rainfall: Int32Array) {
     (this.rainfall.data as Uint32Array).set(rainfall, 0);
+  }
+
+  setWorldPressure(
+    pressureJanuary: Float32Array,
+    pressureJuly: Float32Array,
+  ) {
+    (this.pressureJanuary.data as Float32Array).set(pressureJanuary);
+    (this.pressureJuly.data as Float32Array).set(pressureJuly);
   }
 
   setWorldRivers(riverData: number[][]) {

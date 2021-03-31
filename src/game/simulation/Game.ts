@@ -42,7 +42,7 @@ export class Game {
   entityUpdates$: Subject<Entity>;
 
   context: Context;
-  mapMode$: BehaviorSubject<MapModeType> = new BehaviorSubject(MapModeType.Terrain);
+  mapMode$: BehaviorSubject<MapModeType> = new BehaviorSubject(parseInt(localStorage.mapMode, 10) ?? MapModeType.Terrain);
 
   gameMap: GameMap;
 
@@ -143,6 +143,7 @@ export class Game {
   }
 
   changeMapMode(mapModeType: MapModeType) {
+    localStorage.mapMode = mapModeType;
     this.mapMode$.next(mapModeType);
   }
 }
