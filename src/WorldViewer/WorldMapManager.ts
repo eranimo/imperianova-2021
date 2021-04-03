@@ -1,7 +1,7 @@
 import { BehaviorSubject, Subject } from 'rxjs';
 import { ArrayView, MapView } from 'structurae';
 import { MapMode, MapModeType, mapModes, TileStates } from './mapMode';
-import { Size } from '../types';
+import { Size, Direction, Coord, oddq_directions } from '../types';
 import { WorldMapStateHex, WorldMapState } from './worldMapState';
 import { Grid2D } from '../utils/Grid2D';
 
@@ -44,9 +44,13 @@ export class WorldMapManager {
     const index = this.hexCoordForIndex.get(x, y);
     const hex = this.getHex(index);
     if (hex === undefined) {
-      throw new Error(`Cannot find hex at index "${index}" (${x}, ${y})`);
+      return null;
     }
     return hex;
+  }
+
+  hasHex(x: number, y: number) {
+    return this.hexesView.get(this.hexCoordForIndex.get(x, y)) !== undefined;
   }
 
   getHex(index: number): WorldMapStateHex {
@@ -61,6 +65,14 @@ export class WorldMapManager {
     for (const hex of this.worldMapState.get('hexes')) {
       yield hex as WorldMapStateHex;
     }
+  }
+
+  getHexNeighbor(hex: Coord, direction: Direction): Coord {
+    const [x, y] = hex;
+    const parity = x & 1;
+    const dir = oddq_directions[parity][direction];
+    const coord = [x + dir[0], y + dir[1]];
+    return coord as Coord;
   }
 
   setMapMode(mapModeType: MapModeType) {

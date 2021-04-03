@@ -22,6 +22,7 @@ const CHUNK_WIDTH = 10;
 const CHUNK_HEIGHT = 10;
 
 const DEBUG_RIVER_COLOR = 0x0000FF;
+const DEBUG_BORDER_COLOR = 0x333333;
 const DEBUG_ROAD_COLOR = 0x80530b;
 
 class MapIcon extends Container{
@@ -85,6 +86,7 @@ export class WorldMap {
   regionLayer: ParticleContainer;
   roadsLayer: ParticleContainer;
   riversLayer: ParticleContainer;
+  terrainBorderLayer: ParticleContainer;
 
   hexOverlaySprites: Map<number, Sprite>;
   hexGridSprites: Map<number, Sprite>;
@@ -128,6 +130,7 @@ export class WorldMap {
     this.regionLayer = new ParticleContainer(width * height, { tint: true });
     this.roadsLayer = new ParticleContainer(width * height, { tint: true });
     this.riversLayer = new ParticleContainer(width * height, { tint: true });
+    this.terrainBorderLayer = new ParticleContainer(width * height, { tint: true });
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x += 2) {
@@ -168,7 +171,8 @@ export class WorldMap {
     });
 
     manager.mapMode$.subscribe(mapMode => {
-      this.riversLayer.visible = mapMode.displayRivers;
+      this.riversLayer.visible = mapMode.mapSettings.displayRivers;
+      this.terrainBorderLayer.visible = mapMode.mapSettings.showCoastlineBorder;
       updateMap();
     });
 
@@ -271,6 +275,10 @@ export class WorldMap {
     }
   }
 
+  onViewportZoom(viewport: Viewport) {
+    this.gridLayer.visible = viewport.scale.x > 1;
+  }
+
   private getChunkForCoordinate(x: number, y: number) {
     const y2 = x % 2 + y * 2;
     const chunkY = y2 / CHUNK_HEIGHT | 0;
@@ -287,6 +295,7 @@ export class WorldMap {
       const hex = this.manager.getHexFromCoord(pos.x, pos.y);
       const hexIndex = this.manager.hexCoordForIndex.get(pos.x, pos.y);
       const terrainType = hex.terrainType;
+      const height = hex.height;
       if (terrainType === TerrainType.NONE) return;
       const x = hex.posX;
       const y = hex.posY;
@@ -359,6 +368,22 @@ export class WorldMap {
           // this.cull.remove(sprite as any);
           this.regionLayer.removeChild(sprite);
           this.hexBorderSprites.get(hexIndex).delete(dir);
+        }
+      }
+
+      const sealevel = this.manager.worldMapState.get('sealevel');
+      if (height >= sealevel) {
+        for (const dir of directionIndexOrder) {
+          const [nx, ny] = this.manager.getHexNeighbor([hex.coordX, hex.coordY], dir);
+          const neighborIndex = this.manager.hexCoordForIndex.get(nx, ny);
+          if (neighborIndex && this.manager.getHexField(neighborIndex, 'height') < sealevel) {
+            const borderSprite = new Sprite(this.assets.hexTemplate.getTile(dir));
+            borderSprite.tint = DEBUG_BORDER_COLOR;
+            borderSprite.position.set(x, y);
+            borderSprite.width = this.assets.hexMask.width;
+            borderSprite.height = this.assets.hexMask.height;
+            this.terrainBorderLayer.addChild(borderSprite);
+          }
         }
       }
 

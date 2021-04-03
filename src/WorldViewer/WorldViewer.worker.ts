@@ -103,6 +103,7 @@ function setupApp(
   viewport.addChild(worldMap.overlayLayer as any);
   viewport.addChild(worldMap.riversLayer as any);
   viewport.addChild(worldMap.roadsLayer as any);
+  viewport.addChild(worldMap.terrainBorderLayer as any);
   viewport.addChild(worldMap.gridLayer as any);
   viewport.addChild(worldMap.regionLayer as any);
   viewport.addChild(worldMap.iconsLayer as any);
@@ -111,6 +112,10 @@ function setupApp(
 
   viewport$.subscribe(() => {
     worldMap.onViewportMoved(viewport);
+  });
+
+  viewport.on('zoomed', () => {
+    worldMap.onViewportZoom(viewport);
   });
 
   viewport.on('pointermove', throttle(({ data }) => {

@@ -8,16 +8,24 @@ import { ColorArray } from '../types';
 
 export type TileStates = Map<number, WorldMapStateHex>;
 
+type MapSettings = {
+  displayRivers: boolean;
+  showCoastlineBorder: boolean;
+}
+
 export interface MapMode {
   title: string;
-  displayRivers: boolean;
+  mapSettings: MapSettings;
   init?(manager: WorldMapManager): void;
   setTile(index: number, manager: WorldMapManager): number;
 }
 
 class TerrainMapMode implements MapMode {
   title = 'Terrain';
-  displayRivers = true;
+  mapSettings = {
+    displayRivers: true,
+    showCoastlineBorder: false,
+  };
   setTile(index: number, manager: WorldMapManager) {
     return terrainColors[manager.getHexField(index, 'terrainType')];
   }
@@ -25,7 +33,10 @@ class TerrainMapMode implements MapMode {
 
 class DistanceToCoastMapMode implements MapMode {
   title = 'Distance to coast';
-  displayRivers = false;
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+  };
   colors: [number, number, number, number][];
   maxDistance: number;
   manager: WorldMapManager;
@@ -65,7 +76,10 @@ class DistanceToCoastMapMode implements MapMode {
 
 class HeightMapMode implements MapMode {
   title = 'Height';
-  displayRivers = false;
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+  };
 
   colorsWater: [number, number, number, number][];
   colorsLand: [number, number, number, number][];
@@ -111,7 +125,10 @@ class HeightMapMode implements MapMode {
 
 class RainfallMapMode implements MapMode {
   title = 'Rainfall';
-  displayRivers = true;
+  mapSettings = {
+    displayRivers: true,
+    showCoastlineBorder: true,
+  };
   colors: [number, number, number, number][];
 
   init(manager: WorldMapManager) {
@@ -137,7 +154,10 @@ class RainfallMapMode implements MapMode {
 
 class PopulationMapMode implements MapMode {
   title = 'Population';
-  displayRivers = false;
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: false,
+  };
   maxPopulation: number;
   colors: [number, number, number, number][];
 
@@ -189,7 +209,10 @@ const COLOR_P5: ColorArray = [253, 141, 9];
 const COLOR_P6: ColorArray = [255, 255, 9];
 
 class PressureMapMode implements MapMode {
-  displayRivers = true;
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+  };
   colors: [number, number, number, number][];
 
   constructor(
