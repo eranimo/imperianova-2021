@@ -316,8 +316,8 @@ export class WorldGenerator {
       return 1 - (distanceToCenter / spread);
     };
 
-    const RANDOMIZE_AMOUNT = 0;
-    const BLUR_PASSES = 0;
+    const RANDOMIZE_AMOUNT = 3;
+    const BLUR_PASSES = 20;
 
     const northernLongitudeLandAmount = new Map<number, number>();
     const southernLongitudeLandAmount = new Map<number, number>();
@@ -343,7 +343,7 @@ export class WorldGenerator {
       decideColdSeason: (lat: number) => boolean
     ) => {
       const { lat } = this.world.getHexCoordinate(hex);
-      const isInland = this.world.isLand(hex);
+      const isInland = this.world.getHexHeight(hex) >= sealevel;
       const isNorth = lat > 0;
       const MAX_DIST_TO_COAST = 30;
       const distanceToCoastRaw = Math.min(30, this.world.distanceToCoast.get(hex.x, hex.y)) / MAX_DIST_TO_COAST;
@@ -355,73 +355,90 @@ export class WorldGenerator {
       let pressure: number = 1004;
 
       const SPREAD = 15;
-      let shift = 0;
+      let BELT_ITCZ = 0;
       // in january the ITCZ shifts SOUTH on longitudes with more land
       // in july the ITCZ shifts NORTH on longitudes with more land
       if (isJanuary) {
-        shift -= southernLongitudeLandAmount.get(hex.x) * 30;
+        BELT_ITCZ -= southernLongitudeLandAmount.get(hex.x) * 20;
       } else {
-        shift += northernLongitudeLandAmount.get(hex.x) * 30;
+        BELT_ITCZ += northernLongitudeLandAmount.get(hex.x) * 20;
+      }
+
+      // add some high pressure around the equator because reasons
+      if (
+        inRange(lat, BELT_ITCZ - 45, BELT_ITCZ + 45)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, BELT_ITCZ, 45);
+        pressure += 12 * latitudeComponent;
       }
 
       // absolute latitude of each pressure belt
-      const BELT_LTCZ = 0;
-      const BELT_LTCZ_LOW = BELT_LTCZ - SPREAD + shift;
-      const BELT_LTCZ_HIGH = BELT_LTCZ + SPREAD + shift;
-      const BELT_STHZ = 30;
-      const BELT_PF = 60;
+      const BELT_STHZ_NORTH = BELT_ITCZ + (90 - BELT_ITCZ) / 3; // 1/3 from the ITCZ
+      const BELT_STHZ_SOUTH = BELT_ITCZ + (BELT_ITCZ - 90) / 3; // 1/3 from the ITCZ
+      const BELT_PF_NORTH = BELT_STHZ_NORTH + ((90 - BELT_STHZ_NORTH) / 2); // between STHZ and poles
+      const BELT_PF_SOUTH = BELT_STHZ_SOUTH - ((BELT_STHZ_SOUTH + 90) / 2); // between STHZ and poles
 
       // ITCZ = low pressure band caused by hot tropical air
       if (
-        inRange(lat, BELT_LTCZ_LOW, BELT_LTCZ_HIGH)
+        inRange(lat, BELT_ITCZ - SPREAD, BELT_ITCZ + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_LTCZ + shift, SPREAD); // 1 at 0 lat, 0 at 15 lat
+        const latitudeComponent = getLatitudeGradient(lat, BELT_ITCZ, SPREAD);
         pressure -= 8 * latitudeComponent;
       }
       // STHZ = subtropical high pressure zone caused by air from the ITCZ cooling and sinking back to the ground
       else if (
         // northern hemisphere
-        inRange(lat, BELT_STHZ - SPREAD + shift, BELT_STHZ + SPREAD + shift)
+        inRange(lat, BELT_STHZ_NORTH - SPREAD, BELT_STHZ_NORTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ + shift, SPREAD);
+        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ_NORTH, SPREAD);
         pressure += 12 * latitudeComponent;
       } else if (
         // southern hemisphere
-        inRange(lat, -BELT_STHZ - SPREAD + shift, -BELT_STHZ + SPREAD + shift)
+        inRange(lat, BELT_STHZ_SOUTH - SPREAD, BELT_STHZ_SOUTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, -BELT_STHZ + shift, SPREAD);
+        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ_SOUTH, SPREAD);
         pressure += 12 * latitudeComponent;
       }
       // PF = polar front, a band of low pressure where cold air from the poles meets warm air from the STHZ
       else if (
         // northern hemisphere
-        inRange(lat, BELT_PF - SPREAD + shift, BELT_PF + SPREAD + shift)
+        inRange(lat, BELT_PF_NORTH - SPREAD, BELT_PF_NORTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_PF + shift, SPREAD);
-        pressure -= 6 * latitudeComponent;
+        const latitudeComponent = getLatitudeGradient(lat, BELT_PF_NORTH, SPREAD);
+        pressure -= 12 * latitudeComponent;
       } else if (
         // southern hemisphere
-        inRange(lat, -BELT_PF - SPREAD + shift, -BELT_PF + SPREAD + shift)
+        inRange(lat, BELT_PF_SOUTH - SPREAD, BELT_PF_SOUTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, -BELT_PF + shift, SPREAD);
-        pressure -= 6 * latitudeComponent;
+        const latitudeComponent = getLatitudeGradient(lat, BELT_PF_SOUTH, SPREAD);
+        pressure -= 12 * latitudeComponent;
       }
-      // // poles have high pressure because they're cold
-      // else if (absLat > 75) {
-      //   const latitudeComponent = (absLat - 75) / SPREAD;
-      //   pressure += 6 * latitudeComponent;
-      // }
+      // poles have high pressure because they're cold
+      else if (
+        lat > BELT_PF_NORTH
+      ) {
+        const latitudeComponent = (lat - BELT_PF_NORTH) / (90 - BELT_PF_NORTH);
+        pressure += 4 * latitudeComponent;
+      } else if (
+        lat < BELT_PF_SOUTH
+      ) {
+        const latitudeComponent = (lat - BELT_PF_NORTH) / (-90 - BELT_PF_NORTH);
+        pressure += 4 * latitudeComponent;
+      }
 
       // in winter over land, high pressure
       // in summer over land, low pressure
 
-      // if (isInland) {
-      //   if (isColdSeason) {
-      //     pressure += 10 * coastalRatio;
-      //   } else {
-      //     pressure -= 10 * coastalRatio;
-      //   }
-      // }
+      const amount = lat > 0
+        ? clamp(lat / BELT_STHZ_NORTH, 0, 1) * (((90 - absLat) / 90) * 20)
+        : clamp(lat / BELT_STHZ_SOUTH, 0, 1) * (((90 - absLat) / 90) * 20)
+      if (isInland) {
+        if (isColdSeason) {
+          pressure += amount * coastalRatio;
+        } else {
+          pressure -= amount * coastalRatio;
+        }
+      }
 
       return pressure;
     }
