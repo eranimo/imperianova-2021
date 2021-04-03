@@ -7,7 +7,7 @@ import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats } from '../../util
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
 import { Grid2D } from '../../utils/Grid2D';
-import { inRange, sortBy } from 'lodash';
+import { inRange, sortBy, clamp } from 'lodash';
 
 
 export type WorldGeneratorOptions = {
@@ -316,97 +316,121 @@ export class WorldGenerator {
       return 1 - (distanceToCenter / spread);
     };
 
+    const RANDOMIZE_AMOUNT = 0;
+    const BLUR_PASSES = 0;
+
+    const northernLongitudeLandAmount = new Map<number, number>();
+    const southernLongitudeLandAmount = new Map<number, number>();
+
+    for (let x = 0; x < width; x++) {
+      const center = Math.round(height / 2);
+      let north = 0;
+      let south = 0;
+      for (let y = center; y >= 0; y--) {
+        north += Number(this.world.heightmap.get(x, y) >= sealevel);
+      }
+      for (let y = center - 1; y < height; y++) {
+        south += Number(this.world.heightmap.get(x, y) >= sealevel);
+      }
+      northernLongitudeLandAmount.set(x, clamp(north / center, 0, 1));
+      southernLongitudeLandAmount.set(x, clamp(south / center, 0, 1));
+    }
+    console.log(northernLongitudeLandAmount, southernLongitudeLandAmount);
+
     const decidePressure = (
       hex: Hex,
+      isJanuary: boolean,
       decideColdSeason: (lat: number) => boolean
     ) => {
       const { lat } = this.world.getHexCoordinate(hex);
       const isInland = this.world.isLand(hex);
+      const isNorth = lat > 0;
       const MAX_DIST_TO_COAST = 30;
       const distanceToCoastRaw = Math.min(30, this.world.distanceToCoast.get(hex.x, hex.y)) / MAX_DIST_TO_COAST;
       const distanceToCoast = MAX_DIST_TO_COAST * (1 - Math.pow(1 - distanceToCoastRaw, 3));
+      const coastalRatio = distanceToCoast / MAX_DIST_TO_COAST;
       let isColdSeason = decideColdSeason(lat);
       const absLat = Math.abs(lat);
 
       let pressure: number = 1004;
-      const HIGH_PRESSURE_SPREAD = 15;
-      const LOW_PRESSURE_SPREAD = 10;
-      const LAND_HIGH_RESSURE_MAX = 10;
-      const LAND_LOW_RESSURE_MAX = 2;
-      const OCEAN_HIGH_PRESSURE_MAX = 10;
-      const OCEAN_LOW_PRESSURE_MAX = 5;
 
-      if (inRange(lat, -25, 25)) {
-        // slightly high pressure around tropics
-        // slightly less over land
-        const latitudeComponent = 0.5 + ((absLat / 25) / 2);
-        if (isInland) {
-          // less pressure further inland
-          const v = 1 - (distanceToCoast / MAX_DIST_TO_COAST);
-          pressure += 5 * v * latitudeComponent;
-        } else {
-          // more pressure further out to sea
-          const v = (distanceToCoast / MAX_DIST_TO_COAST);
-          pressure += (5 + (10 * v)) * latitudeComponent;
-        }
-      }
-
-      if (isInland) {
-        // land
-        const latitudeComponent = getLatitudeGradient(absLat, 45, 45);
-        if (isColdSeason) {
-          // High pressure systems develop over the continents (including the poles). Larger continent = higher pressure.
-          // No low pressure overland.
-          pressure += (latitudeComponent * distanceToCoast * 0.10) * (latitudeComponent * LAND_HIGH_RESSURE_MAX);
-        } else {
-          // hot temperatures prevent the formation of high pressure systems.
-          // large landmasses become hot and the low pressure can cover most of the continent.
-          pressure -= (latitudeComponent * distanceToCoast * 0.10) * (latitudeComponent * LAND_LOW_RESSURE_MAX);
-        }
+      const SPREAD = 15;
+      let shift = 0;
+      // in january the ITCZ shifts SOUTH on longitudes with more land
+      // in july the ITCZ shifts NORTH on longitudes with more land
+      if (isJanuary) {
+        shift -= southernLongitudeLandAmount.get(hex.x) * 30;
       } else {
-        // // ocean
-        if (isColdSeason) {
-          // High pressure 30° in a more or less continuous line
-          // Low pressure centered around 55°
-          if (
-            inRange(absLat, 30 - HIGH_PRESSURE_SPREAD, 30 + HIGH_PRESSURE_SPREAD)
-          ) {
-            const latitudeComponent = getLatitudeGradient(absLat, 30, HIGH_PRESSURE_SPREAD);
-            pressure += (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_HIGH_PRESSURE_MAX);
-          } else if (
-            inRange(absLat, 55 - LOW_PRESSURE_SPREAD, 55 + LOW_PRESSURE_SPREAD)
-          ) {
-            const latitudeComponent = getLatitudeGradient(absLat, 55, LOW_PRESSURE_SPREAD);
-            pressure -= (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_LOW_PRESSURE_MAX);
-          }
-        } else {
-          // High pressure: 35° separated, mostly on the eastern side of the oceans
-          // Tend to be located on the eastern side, close to the continents because it’s where the cold currents are flowing.
-          // In summer, the high pressure system breaks apart as the continents are affected by low pressure systems due to hotter temperatures.
-
-          // Low pressure centers move 5 to 10° closer to the poles. They tend to disappear over the land.
-          if (
-            inRange(absLat, 35 - HIGH_PRESSURE_SPREAD, 35 + HIGH_PRESSURE_SPREAD)
-          ) {
-            const latitudeComponent = getLatitudeGradient(absLat, 35, HIGH_PRESSURE_SPREAD);
-            pressure += (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_HIGH_PRESSURE_MAX);
-          } else if (
-            inRange(absLat, 60 - LOW_PRESSURE_SPREAD, 60 + LOW_PRESSURE_SPREAD)
-          ) {
-            const latitudeComponent = getLatitudeGradient(absLat, 60, LOW_PRESSURE_SPREAD);
-            pressure -= (distanceToCoast * 0.10) * (latitudeComponent * OCEAN_LOW_PRESSURE_MAX);
-          }
-        }
+        shift += northernLongitudeLandAmount.get(hex.x) * 30;
       }
+
+      // absolute latitude of each pressure belt
+      const BELT_LTCZ = 0;
+      const BELT_LTCZ_LOW = BELT_LTCZ - SPREAD + shift;
+      const BELT_LTCZ_HIGH = BELT_LTCZ + SPREAD + shift;
+      const BELT_STHZ = 30;
+      const BELT_PF = 60;
+
+      // ITCZ = low pressure band caused by hot tropical air
+      if (
+        inRange(lat, BELT_LTCZ_LOW, BELT_LTCZ_HIGH)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, BELT_LTCZ + shift, SPREAD); // 1 at 0 lat, 0 at 15 lat
+        pressure -= 8 * latitudeComponent;
+      }
+      // STHZ = subtropical high pressure zone caused by air from the ITCZ cooling and sinking back to the ground
+      else if (
+        // northern hemisphere
+        inRange(lat, BELT_STHZ - SPREAD + shift, BELT_STHZ + SPREAD + shift)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ + shift, SPREAD);
+        pressure += 12 * latitudeComponent;
+      } else if (
+        // southern hemisphere
+        inRange(lat, -BELT_STHZ - SPREAD + shift, -BELT_STHZ + SPREAD + shift)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, -BELT_STHZ + shift, SPREAD);
+        pressure += 12 * latitudeComponent;
+      }
+      // PF = polar front, a band of low pressure where cold air from the poles meets warm air from the STHZ
+      else if (
+        // northern hemisphere
+        inRange(lat, BELT_PF - SPREAD + shift, BELT_PF + SPREAD + shift)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, BELT_PF + shift, SPREAD);
+        pressure -= 6 * latitudeComponent;
+      } else if (
+        // southern hemisphere
+        inRange(lat, -BELT_PF - SPREAD + shift, -BELT_PF + SPREAD + shift)
+      ) {
+        const latitudeComponent = getLatitudeGradient(lat, -BELT_PF + shift, SPREAD);
+        pressure -= 6 * latitudeComponent;
+      }
+      // // poles have high pressure because they're cold
+      // else if (absLat > 75) {
+      //   const latitudeComponent = (absLat - 75) / SPREAD;
+      //   pressure += 6 * latitudeComponent;
+      // }
+
+      // in winter over land, high pressure
+      // in summer over land, low pressure
+
+      // if (isInland) {
+      //   if (isColdSeason) {
+      //     pressure += 10 * coastalRatio;
+      //   } else {
+      //     pressure -= 10 * coastalRatio;
+      //   }
+      // }
 
       return pressure;
     }
 
     this.world.hexgrid.forEach((hex, index) => {
       // in january it's cold season in the north
-      const januaryPressure = decidePressure(hex, lat => lat > 0);
+      const januaryPressure = decidePressure(hex, true, lat => lat > 0);
       // in july its cold season in the south
-      const julyPressure = decidePressure(hex, lat => lat < 0);
+      const julyPressure = decidePressure(hex, false, lat => lat < 0);
 
       pressureJanuary.set(hex.x, hex.y, januaryPressure);
       pressureJuly.set(hex.x, hex.y, julyPressure);
@@ -418,14 +442,14 @@ export class WorldGenerator {
       const [nx, ny, nz] = this.hex3DCoords.get(hex);
       let january = pressureJanuary.get(hex.x, hex.y);
       let july = pressureJuly.get(hex.x, hex.y);
-      january += 3 * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
-      july += 3 * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
+      january += RANDOMIZE_AMOUNT * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
+      july += RANDOMIZE_AMOUNT * octaveNoise3D(noise.noise3D.bind(noise), nx, ny, nz, 3, 0.5, 0.9);
       pressureJanuary.set(hex.x, hex.y, january);
       pressureJuly.set(hex.x, hex.y, july);
     });
 
     // blur pressure maps
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < BLUR_PASSES; i++) {
       this.world.hexgrid.forEach((hex, index) => {
         let january = 0;
         let july = 0;
