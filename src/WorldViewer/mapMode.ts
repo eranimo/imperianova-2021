@@ -175,7 +175,7 @@ class PopulationMapMode implements MapMode {
     this.colors = colormap({
       colormap: 'density',
       format: 'float',
-      nshades: 50,
+      nshades: 51,
     });
   }
 
