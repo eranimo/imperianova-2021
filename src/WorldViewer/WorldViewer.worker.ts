@@ -105,6 +105,7 @@ function setupApp(
   viewport.addChild(worldMap.roadsLayer as any);
   viewport.addChild(worldMap.terrainBorderLayer as any);
   viewport.addChild(worldMap.gridLayer as any);
+  viewport.addChild(worldMap.arrowLayer as any);
   viewport.addChild(worldMap.regionLayer as any);
   viewport.addChild(worldMap.iconsLayer as any);
   viewport.addChild(worldMap.debugGraphics as any);

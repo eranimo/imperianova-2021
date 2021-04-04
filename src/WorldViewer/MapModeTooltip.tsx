@@ -5,6 +5,7 @@ import { Coordinate } from '../types';
 import { Box, Text } from '@chakra-ui/react';
 import { terrainTypeTitles } from '../game/world/terrain';
 import { WorldMapStateHex } from './worldMapState';
+import { round } from 'lodash';
 
 type MapModeTooltipProps = {
   hexIndex: number,
@@ -65,13 +66,25 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
   [MapModeType.PressureJanuary, ({ hexIndex, gameMap }) => {
     const pressure = useGameMapState(gameMap, hexIndex, 'pressureJanuary');
     return (
-      <TooltipValue label="Pressure in January" value={Math.round(pressure)} />
+      <TooltipValue label="Pressure in January" value={round(pressure, 2)} />
     );
   }],
   [MapModeType.PressureJuly, ({ hexIndex, gameMap }) => {
     const pressure = useGameMapState(gameMap, hexIndex, 'pressureJuly');
     return (
-      <TooltipValue label="Pressure in July" value={Math.round(pressure)} />
+      <TooltipValue label="Pressure in July" value={round(pressure, 2)} />
+    );
+  }],
+  [MapModeType.WindJanuary, ({ hexIndex, gameMap }) => {
+    const windSpeed = useGameMapState(gameMap, hexIndex, 'windSpeedJanuary');
+    return (
+      <TooltipValue label="Wind speed in January" value={round(windSpeed, 2)} />
+    );
+  }],
+  [MapModeType.WindJuly, ({ hexIndex, gameMap }) => {
+    const windSpeed = useGameMapState(gameMap, hexIndex, 'windSpeedJuly');
+    return (
+      <TooltipValue label="Wind speed in July" value={round(windSpeed, 2)} />
     );
   }],
   [MapModeType.Rainfall, ({ hexIndex, gameMap }) => {

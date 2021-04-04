@@ -85,6 +85,9 @@ module.exports = {
     new ForkTsCheckerWebpackPlugin(),
   ],
   devServer: {
+    host: '0.0.0.0',
+    disableHostCheck: true,
+    port: 8080,
     compress: true,
     historyApiFallback: true,
   },

@@ -2,7 +2,7 @@ import Alea from 'alea';
 import ndarray from 'ndarray';
 import SimplexNoise from 'simplex-noise';
 import { PriorityQueue, Queue } from 'typescript-collections';
-import { Size, Coord } from '../../types';
+import { Size, Coord, directionIndexOrder, Direction } from '../../types';
 import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats } from '../../utils';
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
@@ -25,6 +25,10 @@ export type WorldData = {
   distanceToCoast: Int32Array,
   pressureJanuary: Float32Array,
   pressureJuly: Float32Array,
+  windJanuaryDirection: Uint8ClampedArray,
+  windJanuarySpeed: Float32Array,
+  windJulyDirection: Uint8ClampedArray,
+  windJulySpeed: Float32Array,
 }
 
 function removeDepressions(
@@ -136,7 +140,7 @@ export class WorldGenerator {
     const { terrain, heightmap, distanceToCoast } = this.generateTerrain();
     const rivers = this.generateRivers();
     const rainfall = this.generateRainfall();
-    const { pressureJanuary, pressureJuly } = this.generatePressure();
+    const pressureOutput = this.generateClimate();
     const worldData: WorldData = {
       options,
       terrain,
@@ -144,8 +148,7 @@ export class WorldGenerator {
       rainfall,
       rivers,
       distanceToCoast,
-      pressureJanuary,
-      pressureJuly,
+      ...pressureOutput,
     };
     this.world.setWorldData(worldData);
     return this.world;
@@ -300,8 +303,22 @@ export class WorldGenerator {
     };
   }
 
-  @logGroupTime('generate pressure')
-  generatePressure() {
+  /**
+   * PRESSURE
+   *    Determine areas of high and low pressure
+   * WIND
+   *    From high to low pressure, modulated by coriolis forces
+   * OCEAN CURRENT
+   *    Depending on wind direction
+   * RAINFALL
+   *    Winds moving from oceans and lakes deposit moisture as rainfall
+   *    Moist winds 
+   * TEMPERATURE
+   *    Determine solar insolation in January and July
+   *    Move temperature based on Ocean Current and Wind
+   */
+  @logGroupTime('generate climate')
+  generateClimate() {
     const { width, height } = this.size;
     const { sealevel } = this.options;
     const pressureJanuaryData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
@@ -486,11 +503,77 @@ export class WorldGenerator {
     console.log('pressure january', ndarrayStats(pressureJanuary));
     console.log('pressure july', ndarrayStats(pressureJuly));
 
-    this.world.setWorldPressure(pressureJanuaryData, pressureJulyData);
+    // WIND
+    /**
+     * For both January and July pressure maps:
+     * For each hex:
+     *  Decide the downwind hex:
+     *    Generally, the lowest hex with pressure less than the current hex is the downwind hex
+     *    This is modulated by coriolis effect
+     *      NORTH: clockwise around high pressure, anticlockwise around low pressure
+     *      SOUTH: anticlockwise around high pressure, clockwise around low pressure
+     *    Dominant winds:
+     *      Close to equator: west
+     *      Mid latitudes: east
+     *      Near poles: west
+     *  Decide wind intensity:
+     *    Difference in pressure between the current hex and the downwind hex
+     *      
+     */
+    const windJanuaryDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * width * height))
+    const windJanuaryDirection = ndarray(windJanuaryDirectionData, [width, height]);
+    const windJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const windJanuarySpeed = ndarray(windJanuarySpeedData, [width, height]);
+
+    const windJulyDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * width * height))
+    const windJulyDirection = ndarray(windJulyDirectionData, [width, height]);
+    const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const windJulySpeed = ndarray(windJulySpeedData, [width, height]);
+
+    const decideSeasonWind = (inputPressure: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
+      this.world.hexgrid.forEach((hex, index) => {
+        const thisPressure = inputPressure.get(hex.x, hex.y);
+        let downwindDirection: Direction = null;
+        let downwindPressure = Infinity;
+        for (const dir of directionIndexOrder) {
+          const neighbor = this.world.getHexNeighbor(hex.x, hex.y, dir);
+          if (neighbor === null) continue;
+          const neighborPressure = inputPressure.get(neighbor.x, neighbor.y);
+          if (neighborPressure < thisPressure && neighborPressure < downwindPressure) {
+            downwindPressure = neighborPressure;
+            downwindDirection = dir;
+          }
+        }
+        if (downwindDirection !== null) {
+          outputDirection.set(hex.x, hex.y, downwindDirection);
+          // wind speed is directly proportional to the difference in pressure
+          const windSpeed = (thisPressure - downwindPressure) * 5;
+          outputSpeed.set(hex.x, hex.y, windSpeed);
+        }
+      });
+    };
+    decideSeasonWind(pressureJanuary, windJanuaryDirection, windJanuarySpeed);
+    decideSeasonWind(pressureJuly, windJulyDirection, windJulySpeed);
+
+    console.log('wind january', windJanuaryDirection, windJanuarySpeed);
+    console.log('wind july', windJulyDirection, windJulySpeed);
+
+    this.world.setWorldClimate(
+      pressureJanuaryData,
+      pressureJulyData,
+      windJanuaryDirectionData,
+      windJanuarySpeedData,
+      windJulyDirectionData,
+      windJulySpeedData,
+    );
 
     return {
       pressureJanuary: pressureJanuaryData,
       pressureJuly: pressureJulyData,
+      windJanuaryDirection: windJanuaryDirectionData,
+      windJanuarySpeed: windJanuarySpeedData,
+      windJulyDirection: windJulyDirectionData,
+      windJulySpeed: windJulySpeedData,
     };
   }
 

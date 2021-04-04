@@ -87,6 +87,7 @@ export class WorldMap {
   roadsLayer: ParticleContainer;
   riversLayer: ParticleContainer;
   terrainBorderLayer: ParticleContainer;
+  arrowLayer: ParticleContainer;
 
   hexOverlaySprites: Map<number, Sprite>;
   hexGridSprites: Map<number, Sprite>;
@@ -131,6 +132,7 @@ export class WorldMap {
     this.roadsLayer = new ParticleContainer(width * height, { tint: true });
     this.riversLayer = new ParticleContainer(width * height, { tint: true });
     this.terrainBorderLayer = new ParticleContainer(width * height, { tint: true });
+    this.arrowLayer = new ParticleContainer(width * height, { tint: true });
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x += 2) {
@@ -164,6 +166,21 @@ export class WorldMap {
       }
     }
 
+    const updateArrows = (mapMode: MapMode) => {
+      if (mapMode.mapSettings.enableArrows) {
+        for (let index = 0; index < this.manager.hexLength; index++) {
+          const hex = this.manager.getHex(index);
+          const dir = mapMode.setArrowDir(index, this.manager);
+          const arrowSprite = new Sprite(this.assets.hexTemplate.getTile(6 + dir));
+          arrowSprite.tint = 0xFFFFFF;
+          arrowSprite.position.set(hex.posX, hex.posY);
+          arrowSprite.width = this.assets.hexMask.width;
+          arrowSprite.height = this.assets.hexMask.height;
+          this.arrowLayer.addChild(arrowSprite);
+        }
+      }
+    }
+
     manager.dirty$.subscribe(updateMap);
     manager.dirtyHex$.subscribe(hexIndex => {
       const overlaySprite = this.hexOverlaySprites.get(hexIndex);
@@ -173,7 +190,10 @@ export class WorldMap {
     manager.mapMode$.subscribe(mapMode => {
       this.riversLayer.visible = mapMode.mapSettings.displayRivers;
       this.terrainBorderLayer.visible = mapMode.mapSettings.showCoastlineBorder;
+      this.arrowLayer.visible = mapMode.mapSettings.enableArrows;
       updateMap();
+      updateArrows(mapMode);
+      
     });
 
     this.cull.addList(this.chunksLayer.children as any, true);
@@ -316,11 +336,12 @@ export class WorldMap {
       //     terrainLayer.addFrame(texture, tx, ty);
       //   }
       // }
+      const currentMapMode = this.manager.mapMode$.value;
 
       // overlay
       if (!this.hexOverlaySprites.has(hexIndex)) {
         const overlaySprite = new Sprite(this.assets.hexMask);
-        overlaySprite.tint = this.manager.mapMode$.value.setTile(hex.index, this.manager);
+        overlaySprite.tint = currentMapMode.setTile(hex.index, this.manager);
         overlaySprite.position.set(x, y);
         overlaySprite.width = this.assets.hexMask.width;
         overlaySprite.height = this.assets.hexMask.height;

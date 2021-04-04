@@ -69,6 +69,10 @@ export class World {
   hexEdgeIDs: Map<number, Edge>;
 
   public worldData: WorldData;
+  windJanuaryDirection: ndarray;
+  windJanuarySpeed: ndarray;
+  windJulyDirection: ndarray;
+  windJulySpeed: ndarray;
 
   constructor() {
     this.indexMap = new Map();
@@ -81,7 +85,14 @@ export class World {
     world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap, worldData.distanceToCoast);
-    world.setWorldPressure(worldData.pressureJanuary, worldData.pressureJuly);
+    world.setWorldClimate(
+      worldData.pressureJanuary,
+      worldData.pressureJuly,
+      worldData.windJanuaryDirection,
+      worldData.windJanuarySpeed,
+      worldData.windJulyDirection,
+      worldData.windJulySpeed,
+    );
     world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
     return world;
@@ -121,6 +132,16 @@ export class World {
 
     const pressureJulyBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
     this.pressureJuly = ndarray(new Float32Array(pressureJulyBuffer), arrayDim);
+
+    const windJanuaryDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * arraySize))
+    this.windJanuaryDirection = ndarray(windJanuaryDirectionData, arrayDim);
+    const windJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
+    this.windJanuarySpeed = ndarray(windJanuarySpeedData, arrayDim);
+
+    const windJulyDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * arraySize))
+    this.windJulyDirection = ndarray(windJulyDirectionData, arrayDim);
+    const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
+    this.windJulySpeed = ndarray(windJulySpeedData, arrayDim);
 
     this.hexNeighborDirections = new Map();
     this.hexRoads = new Map();
@@ -205,12 +226,20 @@ export class World {
     (this.rainfall.data as Uint32Array).set(rainfall, 0);
   }
 
-  setWorldPressure(
+  setWorldClimate(
     pressureJanuary: Float32Array,
     pressureJuly: Float32Array,
+    windJanuaryDirection: Uint8ClampedArray,
+    windJanuarySpeed: Float32Array,
+    windJulyDirection: Uint8ClampedArray,
+    windJulySpeed: Float32Array,
   ) {
     (this.pressureJanuary.data as Float32Array).set(pressureJanuary);
     (this.pressureJuly.data as Float32Array).set(pressureJuly);
+    (this.windJanuaryDirection.data as Float32Array).set(windJanuaryDirection);
+    (this.windJanuarySpeed.data as Float32Array).set(windJanuarySpeed);
+    (this.windJulyDirection.data as Float32Array).set(windJulyDirection);
+    (this.windJulySpeed.data as Float32Array).set(windJulySpeed);
   }
 
   setWorldRivers(riverData: number[][]) {

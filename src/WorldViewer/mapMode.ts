@@ -5,12 +5,14 @@ import colormap from 'colormap';
 import { MapView } from 'structurae';
 import { WorldMapManager } from './WorldMapManager';
 import { ColorArray } from '../types';
+import { clamp } from 'lodash';
 
 export type TileStates = Map<number, WorldMapStateHex>;
 
 type MapSettings = {
   displayRivers: boolean;
   showCoastlineBorder: boolean;
+  enableArrows?: boolean;
 }
 
 export interface MapMode {
@@ -18,6 +20,7 @@ export interface MapMode {
   mapSettings: MapSettings;
   init?(manager: WorldMapManager): void;
   setTile(index: number, manager: WorldMapManager): number;
+  setArrowDir?(index: number, manager: WorldMapManager): number;
 }
 
 class TerrainMapMode implements MapMode {
@@ -220,14 +223,6 @@ class PressureMapMode implements MapMode {
     public title: string,
   ) {}
 
-  init(manager: WorldMapManager) {
-    this.colors = colormap({
-      colormap: 'plasma',
-      format: 'float',
-      nshades: 80,
-    });
-  }
-
   setTile(index: number, manager: WorldMapManager) {
     const pressure = manager.getHexField(index, this.key) as number;
     if (pressure < 980) {
@@ -260,11 +255,52 @@ class PressureMapMode implements MapMode {
   }
 }
 
+class WindMapMode implements MapMode {
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+    enableArrows: true,
+  };
+  colors: [number, number, number, number][];
+
+  constructor(
+    private directionKey: keyof WorldMapStateHex,
+    private speedKey: keyof WorldMapStateHex,
+    public title: string,
+  ) {}
+
+  init(manager: WorldMapManager) {
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 100,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const windSpeed = manager.getHexField(index, this.speedKey) as number;
+    const v = Math.round(((windSpeed * 10) / 100) * 100);
+    const color = this.colors[clamp(v, 0, 99)];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+
+  setArrowDir(index: number, manager: WorldMapManager) {
+    return manager.getHexField(index, this.directionKey) as number;
+  }
+}
+
 export enum MapModeType {
   Terrain,
   DistanceToCoast,
   PressureJanuary,
   PressureJuly,
+  WindJanuary,
+  WindJuly,
   Height,
   Rainfall,
   Population,
@@ -275,6 +311,8 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.DistanceToCoast, new DistanceToCoastMapMode()],
   [MapModeType.PressureJanuary, new PressureMapMode('pressureJanuary', 'Pressure (January)')],
   [MapModeType.PressureJuly, new PressureMapMode('pressureJuly', 'Pressure (July)')],
+  [MapModeType.WindJanuary, new WindMapMode('windDirectionJanuary', 'windSpeedJanuary', 'Wind (January)')],
+  [MapModeType.WindJuly, new WindMapMode('windDirectionJuly', 'windSpeedJuly', 'Wind (July)')],
   [MapModeType.Height, new HeightMapMode()],
   [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],
