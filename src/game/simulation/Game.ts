@@ -31,6 +31,10 @@ export type Context = {
   worldGrid: WorldGrid,
 };
 
+const defaultMapmode = localStorage.mapMode
+  ? parseInt(localStorage.mapMode, 10)
+  : MapModeType.Terrain;
+
 export class Game {
   deltaframe: Deltaframe;
   entityManager: EntityManager;
@@ -42,7 +46,7 @@ export class Game {
   entityUpdates$: Subject<Entity>;
 
   context: Context;
-  mapMode$: BehaviorSubject<MapModeType> = new BehaviorSubject(parseInt(localStorage.mapMode, 10) ?? MapModeType.Terrain);
+  mapMode$: BehaviorSubject<MapModeType> = new BehaviorSubject(defaultMapmode);
 
   gameMap: GameMap;
 

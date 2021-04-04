@@ -167,6 +167,7 @@ export class WorldMap {
     }
 
     const updateArrows = (mapMode: MapMode) => {
+      this.arrowLayer.removeChildren();
       if (mapMode.mapSettings.enableArrows) {
         for (let index = 0; index < this.manager.hexLength; index++) {
           const hex = this.manager.getHex(index);
