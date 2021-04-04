@@ -7,6 +7,7 @@ import { Game } from "./Game";
 
 
 type FieldUpdate<K extends keyof WorldMapStateHex, V extends WorldMapStateHex[K]> = {
+  index: number,
   field: K,
   value: V,
 };
@@ -95,7 +96,7 @@ export class GameMap {
 
   setHexState<K extends keyof WorldMapStateHex>(index: number, field: K, value: WorldMapStateHex[K]) {
     (this.hexesView.getView(index) as any).set(field, value);
-    this.hexFieldUpdates.next({ field, value });
+    this.hexFieldUpdates.next({ index, field, value });
   }
 
   getHexState<K extends keyof WorldMapStateHex>(index: number, field: K): WorldMapStateHex[K] {

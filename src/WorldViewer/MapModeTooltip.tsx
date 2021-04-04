@@ -17,7 +17,7 @@ const useGameMapState = <K extends keyof WorldMapStateHex>(gameMap: GameMap, hex
   useEffect(() => {
     setValue(gameMap.getHexState(hexIndex, field));
     const sub = gameMap.hexFieldUpdates.subscribe(update => {
-      if (update.field === field) {
+      if (update.index === hexIndex && update.field === field) {
         setValue(update.value);
       }
     });
