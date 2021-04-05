@@ -72,6 +72,24 @@ export const oppositeDirections: Partial<Record<Direction, Direction>> = {
   [Direction.S]: Direction.N,
 }
 
+export const directionClockwise: Partial<Record<Direction, Direction>> = {
+  [Direction.SE]: Direction.S,
+  [Direction.NE]: Direction.SE,
+  [Direction.N]: Direction.NE,
+  [Direction.NW]: Direction.N,
+  [Direction.SW]: Direction.NW,
+  [Direction.S]: Direction.SW,
+};
+
+export const directionCounterClockwise: Partial<Record<Direction, Direction>> = {
+  [Direction.SE]: Direction.NE,
+  [Direction.NE]: Direction.N,
+  [Direction.N]: Direction.NW,
+  [Direction.NW]: Direction.SW,
+  [Direction.SW]: Direction.S,
+  [Direction.S]: Direction.SE,
+};
+
 export const directionIndexOrder = [
   Direction.SE,
   Direction.NE,

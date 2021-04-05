@@ -328,7 +328,7 @@ export class WorldGenerator {
 
     // pressure is from -30 to 30
 
-    const getLatitudeGradient = (latitude: number, center: number, spread: number) => {
+    const getLatitudeGradientCentered = (latitude: number, center: number, spread: number) => {
       const distanceToCenter = Math.abs(center - latitude);
       return 1 - (distanceToCenter / spread);
     };
@@ -353,6 +353,8 @@ export class WorldGenerator {
       southernLongitudeLandAmount.set(x, clamp(south / center, 0, 1));
     }
     console.log(northernLongitudeLandAmount, southernLongitudeLandAmount);
+
+    const itczLatitude = new Map<number, number>();
 
     const decidePressure = (
       hex: Hex,
@@ -381,11 +383,13 @@ export class WorldGenerator {
         BELT_ITCZ += northernLongitudeLandAmount.get(hex.x) * 20;
       }
 
+      itczLatitude.set(hex.x, BELT_ITCZ);
+
       // add some high pressure around the equator because reasons
       if (
         inRange(lat, BELT_ITCZ - 45, BELT_ITCZ + 45)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_ITCZ, 45);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_ITCZ, 45);
         pressure += 12 * latitudeComponent;
       }
 
@@ -399,7 +403,7 @@ export class WorldGenerator {
       if (
         inRange(lat, BELT_ITCZ - SPREAD, BELT_ITCZ + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_ITCZ, SPREAD);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_ITCZ, SPREAD);
         pressure -= 8 * latitudeComponent;
       }
       // STHZ = subtropical high pressure zone caused by air from the ITCZ cooling and sinking back to the ground
@@ -407,13 +411,13 @@ export class WorldGenerator {
         // northern hemisphere
         inRange(lat, BELT_STHZ_NORTH - SPREAD, BELT_STHZ_NORTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ_NORTH, SPREAD);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_STHZ_NORTH, SPREAD);
         pressure += 12 * latitudeComponent;
       } else if (
         // southern hemisphere
         inRange(lat, BELT_STHZ_SOUTH - SPREAD, BELT_STHZ_SOUTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_STHZ_SOUTH, SPREAD);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_STHZ_SOUTH, SPREAD);
         pressure += 12 * latitudeComponent;
       }
       // PF = polar front, a band of low pressure where cold air from the poles meets warm air from the STHZ
@@ -421,18 +425,18 @@ export class WorldGenerator {
         // northern hemisphere
         inRange(lat, BELT_PF_NORTH - SPREAD, BELT_PF_NORTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_PF_NORTH, SPREAD);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_PF_NORTH, SPREAD);
         pressure -= 12 * latitudeComponent;
       } else if (
         // southern hemisphere
         inRange(lat, BELT_PF_SOUTH - SPREAD, BELT_PF_SOUTH + SPREAD)
       ) {
-        const latitudeComponent = getLatitudeGradient(lat, BELT_PF_SOUTH, SPREAD);
+        const latitudeComponent = getLatitudeGradientCentered(lat, BELT_PF_SOUTH, SPREAD);
         pressure -= 12 * latitudeComponent;
       }
       // poles have high pressure because they're cold
       else if (
-        lat > BELT_PF_NORTH
+        lat >= BELT_PF_NORTH
       ) {
         const latitudeComponent = (lat - BELT_PF_NORTH) / (90 - BELT_PF_NORTH);
         pressure += 4 * latitudeComponent;
@@ -530,6 +534,14 @@ export class WorldGenerator {
     const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const windJulySpeed = ndarray(windJulySpeedData, [width, height]);
 
+    const getLatitudeGradientLinear = (lat: number, maxLat: number, minLat: number) => {
+      // lat is from -90 to 90
+      // when lat = maxLat return 1
+      // when lat = midpoint(maxLat, minLat) return 0.5
+      // when lat = minLat return 0
+      return (((lat + 90) - (minLat + 90)) / ((maxLat + 90) - (minLat + 90)));
+    }
+
     const decideSeasonWind = (inputPressure: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
       this.world.hexgrid.forEach((hex, index) => {
         const thisPressure = inputPressure.get(hex.x, hex.y);
@@ -544,12 +556,107 @@ export class WorldGenerator {
             downwindDirection = dir;
           }
         }
+        let windSpeed = 0;
         if (downwindDirection !== null) {
           outputDirection.set(hex.x, hex.y, downwindDirection);
           // wind speed is directly proportional to the difference in pressure
-          const windSpeed = (thisPressure - downwindPressure) * 5;
-          outputSpeed.set(hex.x, hex.y, windSpeed);
+          windSpeed = (thisPressure - downwindPressure) * 5;
         }
+        outputSpeed.set(hex.x, hex.y, windSpeed);
+
+        // High wind speed areas are more likely to go in the downwind direction
+        // low wind speed areas are more likely to go with the wind patterns
+
+        // where 0 latitude = itczLatitude
+        const { lat } = this.world.getHexCoordinate(hex);
+        /**
+         * TRADE WINDS
+         * from 0 to 30 degrees latitude: (1 at 0 and 0 at 30)
+         *      at 1 = 100% west influence
+         *      at 0 = 0% west influence
+         */
+        const BELT_ITCZ = itczLatitude.get(hex.x);
+        const BELT_STHZ_NORTH = BELT_ITCZ + (90 - BELT_ITCZ) / 3; // 1/3 from the ITCZ
+        const BELT_STHZ_SOUTH = BELT_ITCZ + (BELT_ITCZ - 90) / 3; // 1/3 from the ITCZ
+        const BELT_PF_NORTH = BELT_STHZ_NORTH + ((90 - BELT_STHZ_NORTH) / 2); // between STHZ and poles
+        const BELT_PF_SOUTH = BELT_STHZ_SOUTH - ((BELT_STHZ_SOUTH + 90) / 2); // between STHZ and poles
+        const windSpeedRatio = 1 - clamp(windSpeed / 10, 0, 1); // 1 at 0 m/s 1 at 10 m/s
+        if (inRange(lat, BELT_ITCZ, BELT_STHZ_NORTH)) {
+          // northern trade winds
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_ITCZ, BELT_STHZ_NORTH);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          // from 1 to 0.5 = SW
+          // from 0.5 to 0 = S
+          let dominantDirection: Direction;
+          if (latitudeComponent >= 0.5) {
+            dominantDirection = Direction.SW;
+          } else if (latitudeComponent < 0.5) {
+            dominantDirection = Direction.S;
+          }
+          if (this.rng() < windSpeedRatio) {
+            outputDirection.set(hex.x, hex.y, dominantDirection);
+          }
+        } else if (inRange(lat, BELT_STHZ_SOUTH, BELT_ITCZ)) {
+          // southern trade winds
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_ITCZ, BELT_STHZ_SOUTH);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          // from 1 to 0.5 = NW
+          // from 0.5 to 0 = N
+          let dominantDirection: Direction;
+          if (latitudeComponent >= 0.5) {
+            dominantDirection = Direction.NW;
+          } else if (latitudeComponent < 0.5) {
+            dominantDirection = Direction.N;
+          }
+          if (this.rng() < windSpeedRatio) {
+            outputDirection.set(hex.x, hex.y, dominantDirection);
+          }
+        }
+
+        /**
+         * WESTERLIES
+         * from 30 to 60 degrees latitude: (1 at 60 and 0 at 30)
+         *      at 1 = 100% east influence
+         *      at 0 = 0% east influence
+         */
+        if (inRange(lat, BELT_STHZ_NORTH, BELT_PF_NORTH)) {
+          // northern westerlies
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_NORTH, BELT_STHZ_NORTH);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          if (this.rng() < latitudeComponent) {
+            outputDirection.set(hex.x, hex.y, Direction.SE);
+          }
+        } else if (inRange(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH)) {
+          // southern westerlies
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          if (this.rng() < latitudeComponent) {
+            outputDirection.set(hex.x, hex.y, Direction.NE);
+          }
+        }
+
+        /**
+         * POLAR EASTERLIES
+         * from 60 to 90 degrees latitude: (1 at 60 and 0 at 90)
+         *      at 1 = 100% west influence
+         *      at 0 = 0% west influence
+         */
+        if (lat >= BELT_PF_NORTH) {
+          // northern polar easterlies
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_NORTH, 90);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          if (this.rng() < latitudeComponent) {
+            outputDirection.set(hex.x, hex.y, Direction.NW);
+          }
+        } else if (lat < BELT_PF_SOUTH){
+          // southern polar easteries
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_SOUTH, 90);
+          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
+          if (this.rng() < latitudeComponent) {
+            outputDirection.set(hex.x, hex.y, Direction.SW);
+          }
+        }
+        
       });
     };
     decideSeasonWind(pressureJanuary, windJanuaryDirection, windJanuarySpeed);
