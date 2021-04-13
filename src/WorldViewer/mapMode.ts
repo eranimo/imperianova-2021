@@ -294,11 +294,85 @@ class WindMapMode implements MapMode {
   }
 }
 
+class TempMapMode implements MapMode {
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+    enableArrows: true,
+  };
+  colors: [number, number, number, number][];
+
+  constructor(
+    private tempKey: keyof WorldMapStateHex,
+    public title: string,
+  ) {}
+
+  init(manager: WorldMapManager) {
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 100,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const temp = manager.getHexField(index, this.tempKey) as number;
+    const v = Math.round((temp + 11) * 2);
+
+    const color = this.colors[clamp(v, 0, 99)];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
+class FluxMapMode implements MapMode {
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+    enableArrows: true,
+  };
+  colors: [number, number, number, number][];
+
+  constructor(
+    private fluxKey: keyof WorldMapStateHex,
+    public title: string,
+  ) {}
+
+  init(manager: WorldMapManager) {
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 100,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const flux = manager.getHexField(index, this.fluxKey) as number;
+    const v = Math.round(flux * 100);
+    
+    const color = this.colors[clamp(v, 0, 99)];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
 export enum MapModeType {
   Terrain,
   DistanceToCoast,
   PressureJanuary,
   PressureJuly,
+  TempJanuary,
+  TempJuly,
+  FluxJanuary,
+  FluxJuly,
   WindJanuary,
   WindJuly,
   Height,
@@ -311,6 +385,10 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.DistanceToCoast, new DistanceToCoastMapMode()],
   [MapModeType.PressureJanuary, new PressureMapMode('pressureJanuary', 'Pressure (January)')],
   [MapModeType.PressureJuly, new PressureMapMode('pressureJuly', 'Pressure (July)')],
+  [MapModeType.TempJanuary, new TempMapMode('tempJanuary', 'Temperature (January)')],
+  [MapModeType.TempJuly, new TempMapMode('tempJuly', 'Temperature (July)')],
+  [MapModeType.FluxJanuary, new FluxMapMode('fluxJanuary', 'Solar Flux (January)')],
+  [MapModeType.FluxJuly, new FluxMapMode('fluxJuly', 'Solar Flux (July)')],
   [MapModeType.WindJanuary, new WindMapMode('windDirectionJanuary', 'windSpeedJanuary', 'Wind (January)')],
   [MapModeType.WindJuly, new WindMapMode('windDirectionJuly', 'windSpeedJuly', 'Wind (July)')],
   [MapModeType.Height, new HeightMapMode()],

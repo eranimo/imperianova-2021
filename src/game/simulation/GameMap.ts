@@ -66,6 +66,10 @@ export class GameMap {
         windDirectionJuly: game.world.windJulyDirection.get(hex.x, hex.y),
         windSpeedJuly: game.world.windJulySpeed.get(hex.x, hex.y),
         population: 0,
+        tempJanuary: game.world.getTemperatureJanuary(hex),
+        tempJuly: game.world.getTemperatureJuly(hex),
+        fluxJanuary: game.world.getSolarFluxJanuary(hex),
+        fluxJuly: game.world.getSolarFluxJuly(hex),
         height: game.world.getHexHeight(hex),
         coordX: hex.x,
         coordY: hex.y,
@@ -100,6 +104,7 @@ export class GameMap {
   }
 
   getHexState<K extends keyof WorldMapStateHex>(index: number, field: K): WorldMapStateHex[K] {
+    console.log(this.hexesView.getView(index).toJSON())
     return (this.hexesView.getView(index) as any).get(field);
   }
 

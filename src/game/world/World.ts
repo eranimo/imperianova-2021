@@ -73,11 +73,13 @@ export class World {
   windJanuarySpeed: ndarray;
   windJulyDirection: ndarray;
   windJulySpeed: ndarray;
+  axialTilt: number;
 
   constructor() {
     this.indexMap = new Map();
     this.pointsMap = new Map();
     this.terrainUpdates$ = new Subject();
+    this.axialTilt = 23;
   }
 
   static fromData(worldData: WorldData) {
@@ -391,6 +393,34 @@ export class World {
     }
   }
 
+  // Calculate the NPP of a hex
+  // NPP is increased by the temperature and rainfal
+  // on the hex, higher NPP correlates to biodiversity
+  // and population carrying capacity
+  getHexNPP(hex: Hex): number {
+    const temp = (this.getTemperatureJanuary(hex) + this.getTemperatureJuly(hex)) / 2
+    const precipitation = this.getRainfall(hex);
+    return Math.min(3000 / (1 + Math.exp(1.315 - .119 * temp)), 3000 * (1 - Math.exp(-.000664 * precipitation)));
+  }
+
+  getHexHunterCarryCapacity(hex: Hex): number {
+    if(this.getHexCoordinate(hex).lat > 70) {
+      return 0.0;
+    }
+    // 2700 is the NPP found on Earth
+    const normNPP = this.getHexNPP(hex)/2700;
+    const biodiversity = normNPP * .523 + Math.random() * .477;
+    const pathogens = normNPP * .685 + Math.random() * 1.295 - .98;
+    const carryCapacity = normNPP * .002 +
+      biodiversity * 6.31 +
+      pathogens * -.876 +
+      normNPP * biodiversity * -.003 +
+      normNPP * pathogens * -.002 +
+      2.245;
+    // console.log(normNPP, biodiversity, pathogens, carryCapacity);
+    return Math.max(0, Math.exp(carryCapacity));
+  }
+
   isMapEdge(hex: Hex) {
     return (
       hex.x === 0 || hex.x === (this.gridSize.width - 1) ||
@@ -495,6 +525,27 @@ export class World {
 
   getRainfall(hex: Hex) {
     return this.rainfall.get(hex.x, hex.y);
+  }
+
+  getSolarFluxJanuary(hex: Hex) {
+    const { lat } = this.getHexCoordinate(hex);
+    const effectiveLat = Math.abs(lat + this.axialTilt);
+    // console.log(effectiveLat, (90 - (effectiveLat)) / 90)
+    return Math.max((90 - (effectiveLat)) / 90, 0)
+  }
+
+  getSolarFluxJuly(hex: Hex) {
+    const { lat } = this.getHexCoordinate(hex);
+    const effectiveLat = Math.abs(lat - this.axialTilt);
+    return Math.max((90 - (effectiveLat)) / 90, 0)
+  }
+
+  getTemperatureJanuary(hex: Hex) {
+    return this.getSolarFluxJanuary(hex) * 51 - 11;
+  }
+
+  getTemperatureJuly(hex: Hex) {
+    return this.getSolarFluxJuly(hex) * 51 - 11;
   }
 
   getTerrainForCoord(x: number, y: number): TerrainType {

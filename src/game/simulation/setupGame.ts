@@ -9,27 +9,18 @@ export function setupGame(
   game: Game,
 ) {
   console.log('setup game');
-  const random = new Random('123'); // TODO: game seed option
   /**
    * create initial pops
    */
-  const initialPopHexes = new Set<Hex>();
   for (const landmass of game.world.landmasses) {
-    if (landmass.size > 1) {
-      for (let i = 0; i < 10; i++) {
-        const randomHex = landmass.hexes[random.randomInt(landmass.hexes.length - 1)];
-        initialPopHexes.add(randomHex);
-      }
-    }
+    landmass.hexes.forEach((hex) => {
+      const tileEntity = createTile(game.entityManager, { coord: hex });
+      const population = game.world.getHexHunterCarryCapacity(hex);
+      const popEntity = createPop(game.entityManager, {
+        size: Math.ceil(population * .25 + population * Math.random() * .75),
+        growth: 1,
+      });
+      tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
+    })
   }
-
-  for (const hex of initialPopHexes) {
-    const tileEntity = createTile(game.entityManager, { coord: hex });
-    const popEntity = createPop(game.entityManager, {
-      size: random.randomInt(500),
-      growth: 1,
-    });
-    tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
-  }
-
 }

@@ -75,6 +75,31 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Pressure in July" value={round(pressure, 2)} />
     );
   }],
+  [MapModeType.TempJanuary, ({ hexIndex, gameMap }) => {
+    const temp = useGameMapState(gameMap, hexIndex, 'tempJanuary') as number;
+    return (
+      <TooltipValue label="Temperature in January" value={round(temp, 2)} />
+    );
+  }],
+  [MapModeType.TempJuly, ({ hexIndex, gameMap }) => {
+    const temp = useGameMapState(gameMap, hexIndex, 'tempJuly');
+    return (
+      <TooltipValue label="Temperature in July" value={round(temp, 2)} />
+    );
+  }],
+  [MapModeType.FluxJanuary, ({ hexIndex, gameMap }) => {
+    const flux = useGameMapState(gameMap, hexIndex, 'fluxJanuary');
+    console.log(flux);
+    return (
+      <TooltipValue label="Solar Flux in January" value={round(flux, 2)} />
+    );
+  }],
+  [MapModeType.FluxJuly, ({ hexIndex, gameMap }) => {
+    const flux = useGameMapState(gameMap, hexIndex, 'fluxJuly');
+    return (
+      <TooltipValue label="Solar Flux in July" value={round(flux, 2)} />
+    );
+  }],
   [MapModeType.WindJanuary, ({ hexIndex, gameMap }) => {
     const windSpeed = useGameMapState(gameMap, hexIndex, 'windSpeedJanuary');
     return (
