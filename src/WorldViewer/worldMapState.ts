@@ -26,6 +26,8 @@ export type WorldMapStateHex = {
   regionID?: string,
   river: Record<Direction, number>;
   road: Record<Direction, number>;
+  npp: number;
+  maxHunters: number,
 };
 
 export const WorldMapState = MapViewMixin({
@@ -54,6 +56,7 @@ export const WorldMapState = MapViewMixin({
           windDirectionJuly: { type: 'number', btype: 'uint8' },
           windSpeedJuly: { type: 'number', btype: 'float32' },
           population: { type: 'integer', btype: 'uint32' },
+          npp: { type: 'integer', btype: 'uint32' },
           tempJanuary : { type: 'number', btype: 'float32' },
           tempJuly : { type: 'number', btype: 'float32' },
           fluxJanuary : { type: 'number', btype: 'float32' },

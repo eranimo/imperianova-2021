@@ -403,10 +403,10 @@ export class World {
     return Math.min(3000 / (1 + Math.exp(1.315 - .119 * temp)), 3000 * (1 - Math.exp(-.000664 * precipitation)));
   }
 
-  getHexHunterCarryCapacity(hex: Hex): number {
-    if(this.getHexCoordinate(hex).lat > 70) {
-      return 0.0;
-    }
+  getHexHunterCarryCapacity(hex: Hex) : number {
+    // if(this.getHexCoordinate(hex).lat > 70) {
+    //   return 0.0;
+    // }
     // 2700 is the NPP found on Earth
     const normNPP = this.getHexNPP(hex)/2700;
     const biodiversity = normNPP * .523 + Math.random() * .477;
@@ -481,24 +481,28 @@ export class World {
   bfs(
     visited: ndarray,
     searchFunc: (hex: Hex) => boolean,
-    hex: Hex,
+    initHex: Hex,
   ): Coord[] {
     const queue: [number, number][] = [];
-    queue.unshift([hex.x, hex.y]);
+    queue.unshift([initHex.x, initHex.y]);
     let output = [];
+    // console.log(queue[0]);
     while(queue.length) {
+      // console.log(queue.length);
       const [cx, cy] = queue.shift();
-
+      // visited.set(cx,cy, 0)
       // set cell to visited
       if (visited.get(cx, cy) === 0) {
         visited.set(cx, cy, 1);
         output.push([cx, cy]);
       }
-      for (const n of this.hexNeighbors(hex)) {
+      const currHex = this.getHex(cx, cy);
+      for (const n of this.hexNeighbors(currHex)) {
         if (visited.get(n.x, n.y) === 0) {
           visited.set(n.x, n.y, 1);
           if (searchFunc(n)) {
             queue.unshift([n.x, n.y]);
+            // console.log(queue.length);
             output.push([n.x, n.y]);
           }
         }
@@ -523,28 +527,32 @@ export class World {
     return this.getTerrainForCoord(hex.x, hex.y);
   }
 
+  getDistanceToCoast(hex: Hex) {
+    return this.distanceToCoast.get(hex.x, hex.y);
+  }
+
   getRainfall(hex: Hex) {
     return this.rainfall.get(hex.x, hex.y);
   }
 
-  getSolarFluxJanuary(hex: Hex) {
+  getSolarFluxJanuary(hex: Hex) : number {
     const { lat } = this.getHexCoordinate(hex);
     const effectiveLat = Math.abs(lat + this.axialTilt);
     // console.log(effectiveLat, (90 - (effectiveLat)) / 90)
     return Math.max((90 - (effectiveLat)) / 90, 0)
   }
 
-  getSolarFluxJuly(hex: Hex) {
+  getSolarFluxJuly(hex: Hex) : number {
     const { lat } = this.getHexCoordinate(hex);
     const effectiveLat = Math.abs(lat - this.axialTilt);
     return Math.max((90 - (effectiveLat)) / 90, 0)
   }
 
-  getTemperatureJanuary(hex: Hex) {
+  getTemperatureJanuary(hex: Hex) : number {
     return this.getSolarFluxJanuary(hex) * 51 - 11;
   }
 
-  getTemperatureJuly(hex: Hex) {
+  getTemperatureJuly(hex: Hex) : number {
     return this.getSolarFluxJuly(hex) * 51 - 11;
   }
 

@@ -364,6 +364,37 @@ class FluxMapMode implements MapMode {
   }
 }
 
+class NPPMapMode implements MapMode {
+  title = 'Net Primary Production';
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+    enableArrows: true,
+  };
+  colors: [number, number, number, number][];
+
+  init(manager: WorldMapManager) {
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 100,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const flux = manager.getHexField(index, 'npp') as number;
+    const v = Math.round(flux / 27);
+    
+    const color = this.colors[clamp(v, 0, 99)];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
 export enum MapModeType {
   Terrain,
   DistanceToCoast,
@@ -378,6 +409,7 @@ export enum MapModeType {
   Height,
   Rainfall,
   Population,
+  NPP
 }
 
 export const mapModes: Map<MapModeType, MapMode> = new Map([
@@ -394,4 +426,5 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.Height, new HeightMapMode()],
   [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],
+  [MapModeType.NPP, new NPPMapMode()],
 ]);

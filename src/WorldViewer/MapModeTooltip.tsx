@@ -124,6 +124,12 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Population" value={population.toLocaleString()} />
     );
   }],
+  [MapModeType.NPP, ({ hexIndex, gameMap }) => {
+    const npp = useGameMapState(gameMap, hexIndex, 'npp');
+    return (
+      <TooltipValue label="Net Primary Production" value={npp.toLocaleString()} />
+    );
+  }],
 ]);
 
 

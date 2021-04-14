@@ -77,6 +77,8 @@ export class GameMap {
         posY: pos[1],
         river: river as any,
         road: road as any,
+        npp: game.world.getHexNPP(hex),
+        maxHunters: game.world.getHexHunterCarryCapacity(hex),
       });
     }
     const worldMapStateRaw = {
@@ -104,7 +106,6 @@ export class GameMap {
   }
 
   getHexState<K extends keyof WorldMapStateHex>(index: number, field: K): WorldMapStateHex[K] {
-    console.log(this.hexesView.getView(index).toJSON())
     return (this.hexesView.getView(index) as any).get(field);
   }
 
