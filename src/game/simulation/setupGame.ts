@@ -31,12 +31,7 @@ export function setupGame(
   const isTraversable = (hex: Hex) : boolean => {
     return game.world.getTerrain(hex) != TerrainType.OCEAN || game.world.getDistanceToCoast(hex) <= 7;
   }
-  // This is all bfs setup, 
-  const gridSize = game.world.gridSize;
-  const arraySize = gridSize.height * gridSize.width;
-  const bfsBuffer = new SharedArrayBuffer(Uint32Array.BYTES_PER_ELEMENT * arraySize);
-  const bfsNdarray: ndarray = ndarray(new Uint32Array(bfsBuffer), [gridSize.width, gridSize.height]);
-  const hexCoords : Coord[] = game.world.bfs(bfsNdarray, isTraversable, initLandmass.hexes[0]);
+  const hexCoords : Coord[] = game.world.bfs(isTraversable, initLandmass.hexes[0]);
   hexCoords.push([initLandmass.hexes[0].x, initLandmass.hexes[0].y]);
 
   hexCoords.forEach((coord: Coord) => {
@@ -49,15 +44,4 @@ export function setupGame(
     });
     tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
   })
-  // for (const landmass of game.world.landmasses) {
-  //   landmass.hexes.forEach((hex) => {
-  //     const tileEntity = createTile(game.entityManager, { coord: hex });
-  //     const population = game.world.getHexHunterCarryCapacity(hex);
-  //     const popEntity = createPop(game.entityManager, {
-  //       size: Math.ceil(population * .25 + population * Math.random() * .75),
-  //       growth: 1,
-  //     });
-  //     tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
-  //   })
-  // }
 }

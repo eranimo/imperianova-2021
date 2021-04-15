@@ -479,30 +479,26 @@ export class World {
   }
 
   bfs(
-    visited: ndarray,
     searchFunc: (hex: Hex) => boolean,
     initHex: Hex,
   ): Coord[] {
     const queue: [number, number][] = [];
+    const visited: Set<Hex> = new Set<Hex>();
     queue.unshift([initHex.x, initHex.y]);
     let output = [];
-    // console.log(queue[0]);
     while(queue.length) {
-      // console.log(queue.length);
       const [cx, cy] = queue.shift();
-      // visited.set(cx,cy, 0)
       // set cell to visited
-      if (visited.get(cx, cy) === 0) {
-        visited.set(cx, cy, 1);
+      if (!visited.has(this.getHex(cx, cy))) {
+        visited.add(this.getHex(cx, cy));
         output.push([cx, cy]);
       }
       const currHex = this.getHex(cx, cy);
       for (const n of this.hexNeighbors(currHex)) {
-        if (visited.get(n.x, n.y) === 0) {
-          visited.set(n.x, n.y, 1);
+        if (!visited.has(this.getHex(n.x, n.y))) {
+          visited.add(this.getHex(n.x, n.y));
           if (searchFunc(n)) {
             queue.unshift([n.x, n.y]);
-            // console.log(queue.length);
             output.push([n.x, n.y]);
           }
         }
