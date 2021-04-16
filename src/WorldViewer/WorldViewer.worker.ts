@@ -20,6 +20,7 @@ import { throttle } from 'lodash';
 export type Assets = {
   borderTileset: Tileset,
   gridTexture: Texture,
+  arrowTexture: Texture,
   hexMask: Texture,
   hexTemplate: Tileset,
   hexSectionTileset: HexSectionTileset,
@@ -190,6 +191,7 @@ const worker = {
     loader.add('autogenObjectsPNG', 'png', require('../assets/autogen-objects.png'))
     loader.add('tilesetPNG', 'png', require('../assets/tileset.png'))
     loader.add('gridTexture', 'png', require('../assets/grid.png'))
+    loader.add('arrowTexture', 'png', require('../assets/arrow.png'))
     loader.add('borderTileset', 'png', require('../assets/borders.png'))
     loader.add('tilesetJson', 'json', tilesetJson as any)
     const resources = await loader.load();
@@ -206,6 +208,7 @@ const worker = {
         tilePadding: 0,
       }),
       gridTexture: resources.gridTexture,
+      arrowTexture: resources.arrowTexture as Texture,
       hexMask: resources.hexMask,
       hexSectionTileset: new HexSectionTileset(resources.tilesetJson, resources.tilesetPNG.baseTexture),
     };

@@ -294,6 +294,61 @@ class WindMapMode implements MapMode {
   }
 }
 
+class OceanCurrentMapMode implements MapMode {
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: true,
+    enableArrows: true,
+  };
+  manager: WorldMapManager;
+  maxSpeed: number;
+  colors: [number, number, number, number][];
+
+  constructor(
+    private directionKey: keyof WorldMapStateHex,
+    private speedKey: keyof WorldMapStateHex,
+    public title: string,
+  ) {}
+
+  init(manager: WorldMapManager) {
+    this.maxSpeed = 0;
+    for (let i = 0; i < manager.hexLength; i++) {
+      const speed = manager.getHexField(i, this.speedKey) as number;
+      if (speed !== undefined) {
+        this.maxSpeed = Math.max(this.maxSpeed, speed);
+      }
+    }
+    this.manager = manager;
+    this.colors = colormap({
+      colormap: 'jet',
+      format: 'float',
+      nshades: 100,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const height = manager.getHexField(index, 'height') as number;
+    const sealevel = this.manager.worldMapState.get('sealevel');
+    if (height >= sealevel) return 0x000000;
+    const currentSpeed = manager.getHexField(index, this.speedKey) as number;
+    const v = Math.round(clamp(currentSpeed / this.maxSpeed, 0, 1) * 100);
+    const color = this.colors[clamp(v, 0, 99)];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+
+  setArrowDir(index: number, manager: WorldMapManager) {
+    const height = manager.getHexField(index, 'height') as number;
+    const sealevel = this.manager.worldMapState.get('sealevel');
+    if (height >= sealevel) return null;
+    return manager.getHexField(index, this.directionKey) as number;
+  }
+}
+
 export enum MapModeType {
   Terrain,
   DistanceToCoast,
@@ -301,6 +356,8 @@ export enum MapModeType {
   PressureJuly,
   WindJanuary,
   WindJuly,
+  OceanCurrentJanuary,
+  OceanCurrentJuly,
   Height,
   Rainfall,
   Population,
@@ -313,6 +370,8 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.PressureJuly, new PressureMapMode('pressureJuly', 'Pressure (July)')],
   [MapModeType.WindJanuary, new WindMapMode('windDirectionJanuary', 'windSpeedJanuary', 'Wind (January)')],
   [MapModeType.WindJuly, new WindMapMode('windDirectionJuly', 'windSpeedJuly', 'Wind (July)')],
+  [MapModeType.OceanCurrentJanuary, new OceanCurrentMapMode('oceanCurrentDirectionJanuary', 'oceanCurrentSpeedJanuary', 'Ocean Current (January)')],
+  [MapModeType.OceanCurrentJuly, new OceanCurrentMapMode('oceanCurrentDirectionJuly', 'oceanCurrentSpeedJuly', 'Ocean Current (July)')],
   [MapModeType.Height, new HeightMapMode()],
   [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],

@@ -73,6 +73,10 @@ export class World {
   windJanuarySpeed: ndarray;
   windJulyDirection: ndarray;
   windJulySpeed: ndarray;
+  oceanCurrentJanuaryDirection: ndarray;
+  oceanCurrentJanuarySpeed: ndarray;
+  oceanCurrentJulyDirection: ndarray;
+  oceanCurrentJulySpeed: ndarray;
 
   constructor() {
     this.indexMap = new Map();
@@ -92,6 +96,10 @@ export class World {
       worldData.windJanuarySpeed,
       worldData.windJulyDirection,
       worldData.windJulySpeed,
+      worldData.oceanCurrentJanuaryDirection,
+      worldData.oceanCurrentJanuarySpeed,
+      worldData.oceanCurrentJulyDirection,
+      worldData.oceanCurrentJulySpeed,
     );
     world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
@@ -133,15 +141,25 @@ export class World {
     const pressureJulyBuffer = new SharedArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize);
     this.pressureJuly = ndarray(new Float32Array(pressureJulyBuffer), arrayDim);
 
-    const windJanuaryDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * arraySize))
+    const windJanuaryDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * arraySize))
     this.windJanuaryDirection = ndarray(windJanuaryDirectionData, arrayDim);
     const windJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
     this.windJanuarySpeed = ndarray(windJanuarySpeedData, arrayDim);
 
-    const windJulyDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * arraySize))
+    const windJulyDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * arraySize))
     this.windJulyDirection = ndarray(windJulyDirectionData, arrayDim);
     const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
     this.windJulySpeed = ndarray(windJulySpeedData, arrayDim);
+
+    const oceanCurrentJanuaryDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * arraySize))
+    this.oceanCurrentJanuaryDirection = ndarray(oceanCurrentJanuaryDirectionData, arrayDim);
+    const oceanCurrentJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
+    this.oceanCurrentJanuarySpeed = ndarray(oceanCurrentJanuarySpeedData, arrayDim);
+
+    const oceanCurrentJulyDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * arraySize))
+    this.oceanCurrentJulyDirection = ndarray(oceanCurrentJulyDirectionData, arrayDim);
+    const oceanCurrentJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize))
+    this.oceanCurrentJulySpeed = ndarray(oceanCurrentJulySpeedData, arrayDim);
 
     this.hexNeighborDirections = new Map();
     this.hexRoads = new Map();
@@ -229,17 +247,25 @@ export class World {
   setWorldClimate(
     pressureJanuary: Float32Array,
     pressureJuly: Float32Array,
-    windJanuaryDirection: Uint8ClampedArray,
+    windJanuaryDirection: Int16Array,
     windJanuarySpeed: Float32Array,
-    windJulyDirection: Uint8ClampedArray,
+    windJulyDirection: Int16Array,
     windJulySpeed: Float32Array,
+    oceanCurrentJanuaryDirection: Int16Array,
+    oceanCurrentJanuarySpeed: Float32Array,
+    oceanCurrentJulyDirection: Int16Array,
+    oceanCurrentJulySpeed: Float32Array,
   ) {
     (this.pressureJanuary.data as Float32Array).set(pressureJanuary);
     (this.pressureJuly.data as Float32Array).set(pressureJuly);
-    (this.windJanuaryDirection.data as Float32Array).set(windJanuaryDirection);
+    (this.windJanuaryDirection.data as Int16Array).set(windJanuaryDirection);
     (this.windJanuarySpeed.data as Float32Array).set(windJanuarySpeed);
-    (this.windJulyDirection.data as Float32Array).set(windJulyDirection);
+    (this.windJulyDirection.data as Int16Array).set(windJulyDirection);
     (this.windJulySpeed.data as Float32Array).set(windJulySpeed);
+    (this.oceanCurrentJanuaryDirection.data as Int16Array).set(oceanCurrentJanuaryDirection);
+    (this.oceanCurrentJanuarySpeed.data as Float32Array).set(oceanCurrentJanuarySpeed);
+    (this.oceanCurrentJulyDirection.data as Int16Array).set(oceanCurrentJulyDirection);
+    (this.oceanCurrentJulySpeed.data as Float32Array).set(oceanCurrentJulySpeed);
   }
 
   setWorldRivers(riverData: number[][]) {

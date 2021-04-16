@@ -400,3 +400,19 @@ export function ndarrayStats(ndarray: ndarray) {
     quantiles
   };
 }
+
+function sum(a: number[]): number {
+  var s = 0;
+  for (var i = 0; i < a.length; i++) s += a[i];
+  return s;
+} 
+
+function degToRad(a: number): number {
+  return Math.PI / 180 * a;
+}
+export function meanAngle(angles: number[]): number {  
+  return 180 / Math.PI * Math.atan2(
+    sum(angles.map(degToRad).map(Math.sin)) / angles.length,
+    sum(angles.map(degToRad).map(Math.cos)) / angles.length
+  );
+}
