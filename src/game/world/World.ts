@@ -79,13 +79,13 @@ export class World {
     this.indexMap = new Map();
     this.pointsMap = new Map();
     this.terrainUpdates$ = new Subject();
-    this.axialTilt = 23;
   }
 
   static fromData(worldData: WorldData) {
     const world = new World();
     world.setWorldData(worldData);
     world.setWorldSize(worldData.options.size);
+    world.setWorldAxialTilt(worldData.options.axialTilt);
     world.setWorldTerrain(worldData.terrain, worldData.heightmap, worldData.distanceToCoast);
     world.setWorldClimate(
       worldData.pressureJanuary,
@@ -102,6 +102,10 @@ export class World {
 
   setWorldData(worldData: WorldData) {
     this.worldData = worldData;
+  }
+
+  setWorldAxialTilt(axialTilt: number) {
+    this.axialTilt = axialTilt;
   }
 
   setWorldSize(size: number) {

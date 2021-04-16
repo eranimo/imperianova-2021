@@ -19,6 +19,7 @@ enum WorldSize {
   LARGE = 300,
 }
 const options: WorldGeneratorOptions = {
+  axialTilt: 23,
   size: WorldSize.SMALL,
   sealevel: 140,
   seed: 123,

@@ -20,7 +20,6 @@ export type GameData = {
 }
 
 export type GameOptions = {
-  numStartingPopulation: number,
   world: WorldGeneratorOptions,
 }
 

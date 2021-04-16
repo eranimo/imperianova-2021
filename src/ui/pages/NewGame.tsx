@@ -12,20 +12,20 @@ import { useHistory } from 'react-router';
 import { stringify } from 'query-string';
 
 export const defaultOptions: GameOptions = {
-  numStartingPopulation: 1000,
   world: {
     size: 150,
     sealevel: 140,
     seed: 123,
+    axialTilt: 23
   }
 };
 
 const schema: yup.SchemaOf<GameOptions> = yup.object().shape({
-  numStartingPopulation: yup.number().label('Starting population size').min(0).required(),
   world: yup.object().shape({
     size: yup.number().label('World size').required().min(0),
     sealevel: yup.number().label('Sea level').required().min(20).max(255),
     seed: yup.number().label('Seed').required(),
+    axialTilt: yup.number().label('Axial tilt').required().min(-90).max(90),
   }),
 });
 
@@ -84,7 +84,7 @@ export const NewGame = () => {
           {(({ errors }) => (
             <Form>
               <Stack spacing={5}>
-                <NumberField label="Starting population size" name="numStartingPopulation" />
+                <NumberField label="World axial tilt" name="world.axialTilt" />
                 <NumberField label="World size" name="world.size" />
                 <NumberField label="World sealevel" name="world.sealevel" />
                 <NumberField label="World seed" name="world.seed" />

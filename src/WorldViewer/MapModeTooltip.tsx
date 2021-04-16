@@ -89,7 +89,6 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
   }],
   [MapModeType.FluxJanuary, ({ hexIndex, gameMap }) => {
     const flux = useGameMapState(gameMap, hexIndex, 'fluxJanuary');
-    console.log(flux);
     return (
       <TooltipValue label="Solar Flux in January" value={round(flux, 2)} />
     );

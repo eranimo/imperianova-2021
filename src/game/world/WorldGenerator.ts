@@ -14,6 +14,7 @@ export type WorldGeneratorOptions = {
   size: number,
   sealevel: number,
   seed: number,
+  axialTilt: number,
 }
 
 export type WorldData = {
@@ -134,6 +135,7 @@ export class WorldGenerator {
     this.world = new World();
     this.options = options;
     this.world.setWorldSize(options.size);
+    this.world.setWorldAxialTilt(options.axialTilt);
     this.size = this.world.gridSize;
     this.seed = options.seed;
     this.rng = Alea(this.seed);
