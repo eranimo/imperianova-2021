@@ -3,7 +3,7 @@ import ndarray from 'ndarray';
 import SimplexNoise from 'simplex-noise';
 import { PriorityQueue, Queue } from 'typescript-collections';
 import { Size, Coord, directionIndexOrder, Direction, oppositeDirections, directionAngle } from '../../types';
-import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats, meanAngle } from '../../utils';
+import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats, meanAngle, meanAngleWeighted } from '../../utils';
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
 import { Grid2D } from '../../utils/Grid2D';
@@ -357,8 +357,8 @@ export class WorldGenerator {
       return 1 - (distanceToCenter / spread);
     };
 
-    const RANDOMIZE_AMOUNT = 3;
-    const BLUR_PASSES = 20;
+    const RANDOMIZE_AMOUNT = 4;
+    const BLUR_PASSES = 40;
 
     const northernLongitudeLandAmount = new Map<number, number>();
     const southernLongitudeLandAmount = new Map<number, number>();
@@ -560,6 +560,8 @@ export class WorldGenerator {
     const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const windJulySpeed = ndarray(windJulySpeedData, [width, height]);
 
+    const windTimer = new DebugTimer('wind');
+
     const getLatitudeGradientLinear = (lat: number, maxLat: number, minLat: number) => {
       // lat is from -90 to 90
       // when lat = maxLat return 1
@@ -624,6 +626,66 @@ export class WorldGenerator {
           }
         }
 
+        // prevailing winds
+        const BELT_ITCZ = itczLatitude.get(hex.x);
+        const BELT_STHZ_NORTH = BELT_ITCZ + (90 - BELT_ITCZ) / 3; // 1/3 from the ITCZ
+        const BELT_STHZ_SOUTH = BELT_ITCZ + (BELT_ITCZ - 90) / 3; // 1/3 from the ITCZ
+        const BELT_PF_NORTH = BELT_STHZ_NORTH + ((90 - BELT_STHZ_NORTH) / 2); // between STHZ and poles
+        const BELT_PF_SOUTH = BELT_STHZ_SOUTH - ((BELT_STHZ_SOUTH + 90) / 2); // between STHZ and poles
+
+        let prevailingWindAngle: number;
+        // TRADE WINDS
+        if (inRange(lat, BELT_ITCZ, BELT_STHZ_NORTH)) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_ITCZ, BELT_STHZ_NORTH);
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 180], [weight, 1 - weight]);
+        }
+        else if (inRange(lat, BELT_STHZ_SOUTH, BELT_ITCZ)) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_STHZ_SOUTH, BELT_ITCZ);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 360], [weight, 1 - weight])
+        }
+
+        // WESTERLIES
+        if (inRange(lat, BELT_STHZ_NORTH, BELT_PF_NORTH)) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_STHZ_NORTH, BELT_PF_NORTH);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([90, 0], [weight, 1 - weight]);
+        }
+        else if (inRange(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH)) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH);
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([90, 180], [weight, 1 - weight])
+        }
+
+        // // POLAR EASTERLIES
+        if (lat >= BELT_PF_NORTH) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_NORTH, 90);
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 180], [weight, 1 - weight]);
+        } else if (lat < BELT_PF_SOUTH) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, 90, BELT_PF_SOUTH);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 0], [weight, 1 - weight])
+        }
+
+        // windAngle = prevailingWindAngle;
+
+        // low speed = more likely to be influenced by trade winds
+        windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [ratio, 1 - ratio]);
+
+        // or maybbe use pressure diff?
+        // const pressureDiff = thisPressure - AVG_PRESSURE;
+        // if (pressureDiff > 0) { // high pressure
+        //   const pressureDiffRatio = clamp(pressureDiff / 10, 0, 1); // 1 at clost to mean, 0 at extremes
+        //   windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [pressureDiffRatio, 1 - pressureDiffRatio]);
+        // } else {
+        //   const pressureDiffRatio = clamp(pressureDiff / -10, 0, 1); // 1 at clost to mean, 0 at extremes
+        //   windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [pressureDiffRatio, 1 - pressureDiffRatio]);
+        // }
+
+        // windAngle = meanAngle([windAngle, prevailingWindAngle]);
+
         outputDirection.set(hex.x, hex.y, windAngle % 360);
       });
     };
@@ -632,6 +694,8 @@ export class WorldGenerator {
 
     console.log('wind january', windJanuaryDirection, windJanuarySpeed);
     console.log('wind july', windJulyDirection, windJulySpeed);
+
+    windTimer.stopTimer();
 
     // OCEAN CURRENTS
 
@@ -644,68 +708,71 @@ export class WorldGenerator {
     const oceanCurrentJanuaryDirection = ndarray(oceanCurrentJanuaryDirectionData, [width, height]);
     const oceanCurrentJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const oceanCurrentJanuarySpeed = ndarray(oceanCurrentJanuarySpeedData, [width, height]);
-    // const oceanCurrentJanuaryThermalData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
-    // const oceanCurrentJanuaryThermal = ndarray(oceanCurrentJanuaryThermalData, [width, height]);
 
     const oceanCurrentJulyDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * width * height))
     const oceanCurrentJulyDirection = ndarray(oceanCurrentJulyDirectionData, [width, height]);
     const oceanCurrentJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const oceanCurrentJulySpeed = ndarray(oceanCurrentJulySpeedData, [width, height]);
-    // const oceanCurrentJulyThermalData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
-    // const oceanCurrentJulyThermal = ndarray(oceanCurrentJulyThermalData, [width, height]);
 
     const oceanCurrentTimer = new DebugTimer('ocean currents');
 
-    // let landDirections = new Set<Direction>();
-    // const calculateSeason = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
-    //   this.world.hexgrid.forEach((hex, index) => {
-    //     if (this.world.getHexHeight(hex) >= sealevel) return;
-    //     const windDirection = inputWindDirection.get(hex.x, hex.y) as Direction;
-    //     const { lat } = this.world.getHexCoordinate(hex);
-    //     outputSpeed.set(hex.x, hex.y, (1 - (Math.abs(lat) / 90)) * 30);
-    //     // ocean current goes opposite of wind
-    //     const initialCurrentDirection = windDirection;
 
-    //     const targetHex = this.world.getHexNeighbor(hex.x, hex.y, initialCurrentDirection);
-    //     if (!targetHex) return;
+    /**
+     * a map of hexes to a list of tuples describing what direction is the current going and what percent should go there
+     * e.g.:
+     * windAngle = 0  -> [N, 1.0]
+     * windAngle = 30 -> [N, 0.50], [NE, 0.50] 
+     * windAngle = 15 -> [N, 0.75], [NE, 0.25]
+     */
+    let hexDownwindMap = new Map<Hex, [dir: Direction, percent: number][]>();
+
+    // calculate hexDownwindMap
+    const calculateSeason = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
+      this.world.hexgrid.forEach((hex, index) => {
+        if (this.world.getHexHeight(hex) >= sealevel) return;
+        const windAngle = inputWindDirection.get(hex.x, hex.y);
+        // find nearest two directions to windAngle
+        const sortedDirectionAngles = directionIndexOrder
+          .map(dir => [dir, windAngle - directionAngle[dir]])
+          .sort((a, b) => a[1] - b[1]) as [dir: Direction, diff: number][];
         
-    //     const isInitialHexOcean = this.world.getHexHeight(targetHex) < sealevel;
+        const [firstDirection, secondDirection] = sortedDirectionAngles;
         
-    //     if (isInitialHexOcean) {
-    //       outputDirection.set(hex.x, hex.y, initialCurrentDirection);
-    //     } else {
-    //       const directionList = lat > 0 ? directionSortedNorth : directionSortedSouth;
-    //       const newDirection = directionList.find(dir => {
-    //         const neighbor = this.world.getHexNeighbor(hex.x, hex.y, dir);
-    //         if (!neighbor) return false;
-    //         return this.world.getHexHeight(neighbor) < sealevel;
-    //       });
-    //       outputDirection.set(hex.x, hex.y, newDirection);
-    //     }
-    //   });
-    // }
-    // const step = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
-    //   this.world.hexgrid.forEach((hex, index) => {
-    //     if (this.world.getHexHeight(hex) >= sealevel) return;
-    //     const currentDirection = outputDirection.get(hex.x, hex.y) as Direction;
-    //     const currentSpeed = outputSpeed.get(hex.x, hex.y);
-    //     const target = this.world.getHexNeighbor(hex.x, hex.y, currentDirection);
-    //     if (!target) return;
-    //     const targetSpeed = outputSpeed.get(target.x, target.y);
-    //     outputSpeed.set(target.x, target.y, (currentSpeed + targetSpeed) / 2);
-    //   });
-    // };
-    // const MAX_OCEAN_CURRENT_SIM_TICKS = 50;
+        const currentDirection = windAngle;
+        /**
+         * TODO: implement
+         * if any of the hexes windAngle is pointing to are land hexes, move the windAngle such that
+         * it points towards the poles away from land, then recalculate direction
+         * 
+         * speed should be proportional to the amount of deflection
+         * e.g. if the only ocean neighbor is 180 degrees from the windAngle, then the speed should be very low
+         */
 
-    // calculateSeason(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
-    // for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
-    //   step(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
-    // }
+        // set initial speed
+        outputSpeed.set(hex.x, hex.y, 0.1);
 
-    // calculateSeason(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
-    // for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
-    //   step(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
-    // }
+        // set direction
+        outputDirection.set(hex.x, hex.y, currentDirection);
+      });
+    }
+    // iterate over hexDownwindMap and create current, setting outputSpeed
+    const step = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
+      // this.world.hexgrid.forEach((hex, index) => {
+      //   if (this.world.getHexHeight(hex) >= sealevel) return;
+      //   const downwindHexes = hexDownwindMap.get(hex);
+      // });
+    };
+    const MAX_OCEAN_CURRENT_SIM_TICKS = 50;
+
+    calculateSeason(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
+    for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
+      step(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
+    }
+
+    calculateSeason(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
+    for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
+      step(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
+    }
 
 
     console.log('ocean current january', ndarrayStats(oceanCurrentJanuaryDirection), ndarrayStats(oceanCurrentJanuarySpeed));
