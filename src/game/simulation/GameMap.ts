@@ -78,7 +78,7 @@ export class GameMap {
         river: river as any,
         road: road as any,
         npp: game.world.getHexNPP(hex),
-        maxHunters: game.world.getHexHunterCarryCapacity(hex),
+        hunterCapacity: game.world.getHexHunterCarryCapacity(hex),
       });
     }
     const worldMapStateRaw = {

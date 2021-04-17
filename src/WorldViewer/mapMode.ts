@@ -395,6 +395,48 @@ class NPPMapMode implements MapMode {
   }
 }
 
+class HunterCapacityMapMode implements MapMode {
+  title = 'Hunter Carrying Capacity';
+  mapSettings = {
+    displayRivers: false,
+    showCoastlineBorder: false,
+  };
+  maxPopulation: number;
+  colors: [number, number, number, number][];
+
+  init(manager: WorldMapManager) {
+    this.maxPopulation = 0;
+    for (let i = 0; i < manager.hexLength; i++) {
+      const population = manager.getHexField(i, 'hunterCapacity');
+      if (population !== undefined) {
+        this.maxPopulation = Math.max(this.maxPopulation, population);
+      }
+    }
+    this.colors = colormap({
+      colormap: 'density',
+      format: 'float',
+      nshades: 51,
+    });
+  }
+
+  setTile(index: number, manager: WorldMapManager) {
+    const sealevel = manager.worldMapState.get('sealevel');
+    const height = manager.getHexField(index, 'height');
+    if (height < sealevel) {
+      return 0x111111;
+    }
+    const population = manager.getHexField(index, 'hunterCapacity');
+    const v = Math.round((population / this.maxPopulation) * 50);
+    const color = isNaN(v) ? this.colors[0] : this.colors[v];
+    if (!color) return 0x000000;
+    return colorToNumber([
+      Math.round(color[0] * 255),
+      Math.round(color[1] * 255),
+      Math.round(color[2] * 255),
+    ]);
+  }
+}
+
 export enum MapModeType {
   Terrain,
   DistanceToCoast,
@@ -409,7 +451,8 @@ export enum MapModeType {
   Height,
   Rainfall,
   Population,
-  NPP
+  NPP,
+  HunterCapacity
 }
 
 export const mapModes: Map<MapModeType, MapMode> = new Map([
@@ -427,4 +470,5 @@ export const mapModes: Map<MapModeType, MapMode> = new Map([
   [MapModeType.Rainfall, new RainfallMapMode()],
   [MapModeType.Population, new PopulationMapMode()],
   [MapModeType.NPP, new NPPMapMode()],
+  [MapModeType.HunterCapacity, new HunterCapacityMapMode()],
 ]);

@@ -2,7 +2,7 @@ import { Game } from './Game';
 import { World, Hex, Landmass } from '../world/World';
 import Alea from 'alea';
 import { createTile, createPop } from './entities';
-import { PopDataComponent, WorldTileDataComponent } from './components';
+import { PopDataComponent, WorldTileDataComponent, PopTypes } from './components';
 import { Random } from '../../utils/Random';
 import { LandType } from '../world/terrain';
 import { TerrainType, terrainTypeTitles } from './../world/terrain';
@@ -29,7 +29,8 @@ export function setupGame(
   }
   const initLandmass: Landmass = landmassSet[random.randomInt(landmassSet.length - 1)];
   const isTraversable = (hex: Hex) : boolean => {
-    return game.world.getTerrain(hex) != TerrainType.OCEAN || game.world.getDistanceToCoast(hex) <= 7;
+    return (game.world.getTerrain(hex) != TerrainType.OCEAN && game.world.getTerrain(hex) != TerrainType.COAST)
+    || game.world.getDistanceToCoast(hex) <= 5;
   }
   const hexCoords : Coord[] = game.world.bfs(isTraversable, initLandmass.hexes[0]);
   hexCoords.push([initLandmass.hexes[0].x, initLandmass.hexes[0].y]);
@@ -41,6 +42,9 @@ export function setupGame(
     const popEntity = createPop(game.entityManager, {
       size: Math.ceil(population * .25 + population * Math.random() * .75),
       growth: 1,
+      class: PopTypes.HUNTERGATHERER,
+      hex: hex,
+      game: game,
     });
     tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
   })

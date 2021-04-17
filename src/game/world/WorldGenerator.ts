@@ -152,6 +152,7 @@ export class WorldGenerator {
       distanceToCoast,
       ...pressureOutput,
     };
+    this.world.generateEcology();
     this.world.setWorldData(worldData);
     return this.world;
   }

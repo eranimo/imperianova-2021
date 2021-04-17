@@ -1,7 +1,7 @@
 import { System } from '../entity-system';
 import { Query, EntityManager } from '../entity-system/EntityManager';
 import { Game } from './Game';
-import { PopDataComponent, HexPositionComponent, WorldTileDataComponent } from './components';
+import { PopDataComponent, HexPositionComponent, WorldTileDataComponent, MonthlyPopGrowthRate, CarryingCapacityMap } from './components';
 
 export class PopSystem extends System {
   query: Query;
@@ -13,7 +13,13 @@ export class PopSystem extends System {
   update() {
     for (const entity of this.query.entities) {
       const popData = entity.getComponent(PopDataComponent);
-      popData.value.size += popData.value.growth;
+      const maxPop: number = CarryingCapacityMap.get(popData.value.class)(popData.value.game.world, popData.value.hex);
+      const growthRate = (popData.value.growth * MonthlyPopGrowthRate * popData.value.size);
+      const logisticRate = (1 - popData.value.size / maxPop);
+      const currSize = popData.value.size;
+      const growth = growthRate * logisticRate;
+      const nextSize = currSize + growth;
+      popData.value.size = Math.max(nextSize, 0);
     }
   }
 }

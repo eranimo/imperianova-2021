@@ -129,6 +129,12 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Net Primary Production" value={npp.toLocaleString()} />
     );
   }],
+  [MapModeType.HunterCapacity, ({ hexIndex, gameMap }) => {
+    const hunterCapacity = useGameMapState(gameMap, hexIndex, 'hunterCapacity');
+    return (
+      <TooltipValue label="Hunter Carrying Capacity" value={hunterCapacity.toLocaleString()} />
+    );
+  }],
 ]);
 
 

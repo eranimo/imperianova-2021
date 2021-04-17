@@ -55,6 +55,9 @@ export class World {
   distanceToCoast: ndarray;
   pressureJanuary: ndarray;
   pressureJuly: ndarray;
+  biodiversity: ndarray;
+  pathogenPressure: ndarray;
+  npp: ndarray;
 
   terrainUpdates$: Subject<unknown>;
 
@@ -106,6 +109,30 @@ export class World {
 
   setWorldAxialTilt(axialTilt: number) {
     this.axialTilt = axialTilt;
+  }
+
+  generateEcology() {
+    const gridSize = this.gridSize;
+
+    const arraySize = gridSize.width * gridSize.height;
+    const arrayDim = [gridSize.width, gridSize.height];
+    const biodiversityData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize));
+    this.biodiversity = ndarray(biodiversityData, arrayDim);
+    const pathogenPressureData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize));
+    this.pathogenPressure = ndarray(pathogenPressureData, arrayDim);
+    const nppData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * arraySize));
+    this.npp = ndarray(nppData, arrayDim);
+    this.hexgrid.forEach((hex, index) => {
+      const npp = this.getHexNPP(hex);
+      const {x, y} = hex;
+      this.npp.set(hex.x, hex.y, npp);
+      const normNPP = npp / 2700;
+      const biodiversity = normNPP * .523 + Math.random() * .477;
+      const pathogens = normNPP * .685 + Math.random() * 1.295 - .98;
+      this.biodiversity.set(x, y, biodiversity);
+      this.pathogenPressure.set(x, y, pathogens);
+    });
+
   }
 
   setWorldSize(size: number) {
@@ -412,9 +439,10 @@ export class World {
     //   return 0.0;
     // }
     // 2700 is the NPP found on Earth
-    const normNPP = this.getHexNPP(hex)/2700;
-    const biodiversity = normNPP * .523 + Math.random() * .477;
-    const pathogens = normNPP * .685 + Math.random() * 1.295 - .98;
+    const {x, y} = hex;
+    const normNPP = this.npp.get(x, y)/2700;
+    const biodiversity = this.biodiversity.get(x, y);
+    const pathogens = this.pathogenPressure.get(x, y);
     const carryCapacity = normNPP * .002 +
       biodiversity * 6.31 +
       pathogens * -.876 +
