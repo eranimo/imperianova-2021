@@ -165,3 +165,12 @@ export const cornerIndexOrder = [
   Corner.TOP_LEFT,
   Corner.TOP_RIGHT,
 ];
+
+export const directionAngle = {
+  [Direction.SE]: 120,
+  [Direction.NE]: 60,
+  [Direction.N]: 0,
+  [Direction.NW]: 300,
+  [Direction.SW]: 240,
+  [Direction.S]: 180,
+}

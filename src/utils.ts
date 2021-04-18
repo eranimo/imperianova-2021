@@ -400,3 +400,52 @@ export function ndarrayStats(ndarray: ndarray) {
     quantiles
   };
 }
+
+function sum(a: number[]): number {
+  var s = 0;
+  for (var i = 0; i < a.length; i++) s += a[i];
+  return s;
+} 
+
+function degToRad(a: number): number {
+  return Math.PI / 180 * a;
+}
+export function meanAngle(angles: number[]): number {  
+  return 180 / Math.PI * Math.atan2(
+    sum(angles.map(degToRad).map(Math.sin)) / angles.length,
+    sum(angles.map(degToRad).map(Math.cos)) / angles.length
+  );
+}
+
+export function angleInterpolate(a1: number, w1: number, a2: number, w2: number): number {
+  let diff = a2 - a1;
+  let aa: number;
+
+  if (diff > Math.PI / 2) a1 += Math.PI;
+  else if (diff < -Math.PI / 2) a1 -= Math.PI;
+
+  aa = (w1 * a1 + w2 * a2) / (w1 + w2);
+
+  if (aa > Math.PI / 2) aa -= Math.PI;
+  else if (aa < -Math.PI / 2) aa += Math.PI;
+
+  return aa;
+}
+
+export function meanAngleWeighted(angles: number[], weights: number[]): number {
+  let i: number;
+  let aa: number;
+  let ww: number;
+
+  if (angles.length == 0) return 0;
+
+  aa = angles[0];
+  ww = weights[0];
+
+  for (i = 1; i < angles.length; i++) {
+    aa = angleInterpolate(aa, ww, angles[i], weights[i]);
+    ww += weights[i];
+  }
+
+  return aa;
+}

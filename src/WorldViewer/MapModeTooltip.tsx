@@ -111,6 +111,18 @@ const tooltipData: Map<Partial<MapModeType>, React.FC<MapModeTooltipProps>> = ne
       <TooltipValue label="Wind speed in July" value={round(windSpeed, 2)} />
     );
   }],
+  [MapModeType.OceanCurrentJanuary, ({ hexIndex, gameMap }) => {
+    const currentSpeed = useGameMapState(gameMap, hexIndex, 'oceanCurrentSpeedJanuary');
+    return (
+      <TooltipValue label="Ocean current in January" value={round(currentSpeed, 2)} />
+    );
+  }],
+  [MapModeType.OceanCurrentJuly, ({ hexIndex, gameMap }) => {
+    const currentSpeed = useGameMapState(gameMap, hexIndex, 'oceanCurrentSpeedJuly');
+    return (
+      <TooltipValue label="Ocean current in July" value={round(currentSpeed, 2)} />
+    );
+  }],
   [MapModeType.Rainfall, ({ hexIndex, gameMap }) => {
     const height = useGameMapState(gameMap, hexIndex, 'rainfall');
     return (

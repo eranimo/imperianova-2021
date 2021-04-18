@@ -2,12 +2,13 @@ import Alea from 'alea';
 import ndarray from 'ndarray';
 import SimplexNoise from 'simplex-noise';
 import { PriorityQueue, Queue } from 'typescript-collections';
-import { Size, Coord, directionIndexOrder, Direction } from '../../types';
-import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats } from '../../utils';
+import { Size, Coord, directionIndexOrder, Direction, oppositeDirections, directionAngle } from '../../types';
+import { floodFill, logGroupTime, octaveNoise3D, ndarrayStats, meanAngle, meanAngleWeighted } from '../../utils';
 import { TerrainType } from './terrain';
 import { Edge, World, Hex } from './World';
 import { Grid2D } from '../../utils/Grid2D';
-import { inRange, sortBy, clamp } from 'lodash';
+import { inRange, sortBy, clamp, isArray } from 'lodash';
+import { DebugTimer } from '../../utils/debug';
 
 
 export type WorldGeneratorOptions = {
@@ -26,10 +27,14 @@ export type WorldData = {
   distanceToCoast: Int32Array,
   pressureJanuary: Float32Array,
   pressureJuly: Float32Array,
-  windJanuaryDirection: Uint8ClampedArray,
+  windJanuaryDirection: Int16Array,
   windJanuarySpeed: Float32Array,
-  windJulyDirection: Uint8ClampedArray,
+  windJulyDirection: Int16Array,
   windJulySpeed: Float32Array,
+  oceanCurrentJanuaryDirection: Int16Array,
+  oceanCurrentJanuarySpeed: Float32Array,
+  oceanCurrentJulyDirection: Int16Array,
+  oceanCurrentJulySpeed: Float32Array,
 }
 
 function removeDepressions(
@@ -122,6 +127,25 @@ function removeDepressions(
   return depressions;
 }
 
+const directionSortedNorth = [
+  Direction.N,
+  Direction.NE,
+  Direction.NW,
+  Direction.SE,
+  Direction.SW,
+  Direction.S,
+];
+
+const directionSortedSouth = [
+  Direction.S,
+  Direction.SE,
+  Direction.SW,
+  Direction.NE,
+  Direction.NW,
+  Direction.N,
+];
+
+
 export class WorldGenerator {
   size: Size;
   seed: number;
@@ -142,7 +166,7 @@ export class WorldGenerator {
     const { terrain, heightmap, distanceToCoast } = this.generateTerrain();
     const rivers = this.generateRivers();
     const rainfall = this.generateRainfall();
-    const pressureOutput = this.generateClimate();
+    const climateOutput = this.generateClimate();
     const worldData: WorldData = {
       options,
       terrain,
@@ -150,7 +174,7 @@ export class WorldGenerator {
       rainfall,
       rivers,
       distanceToCoast,
-      ...pressureOutput,
+      ...climateOutput,
     };
     this.world.generateEcology();
     this.world.setWorldData(worldData);
@@ -336,8 +360,8 @@ export class WorldGenerator {
       return 1 - (distanceToCenter / spread);
     };
 
-    const RANDOMIZE_AMOUNT = 3;
-    const BLUR_PASSES = 20;
+    const RANDOMIZE_AMOUNT = 4;
+    const BLUR_PASSES = 40;
 
     const northernLongitudeLandAmount = new Map<number, number>();
     const southernLongitudeLandAmount = new Map<number, number>();
@@ -359,6 +383,8 @@ export class WorldGenerator {
 
     const itczLatitude = new Map<number, number>();
 
+    const AVG_PRESSURE = 1004;
+
     const decidePressure = (
       hex: Hex,
       isJanuary: boolean,
@@ -374,7 +400,7 @@ export class WorldGenerator {
       let isColdSeason = decideColdSeason(lat);
       const absLat = Math.abs(lat);
 
-      let pressure: number = 1004;
+      let pressure: number = AVG_PRESSURE;
 
       const SPREAD = 15;
       let BELT_ITCZ = 0;
@@ -527,15 +553,17 @@ export class WorldGenerator {
      *    Difference in pressure between the current hex and the downwind hex
      *      
      */
-    const windJanuaryDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * width * height))
+    const windJanuaryDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * width * height))
     const windJanuaryDirection = ndarray(windJanuaryDirectionData, [width, height]);
     const windJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const windJanuarySpeed = ndarray(windJanuarySpeedData, [width, height]);
 
-    const windJulyDirectionData = new Uint8ClampedArray(new ArrayBuffer(Uint8ClampedArray.BYTES_PER_ELEMENT * width * height))
+    const windJulyDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * width * height))
     const windJulyDirection = ndarray(windJulyDirectionData, [width, height]);
     const windJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
     const windJulySpeed = ndarray(windJulySpeedData, [width, height]);
+
+    const windTimer = new DebugTimer('wind');
 
     const getLatitudeGradientLinear = (lat: number, maxLat: number, minLat: number) => {
       // lat is from -90 to 90
@@ -548,118 +576,120 @@ export class WorldGenerator {
     const decideSeasonWind = (inputPressure: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
       this.world.hexgrid.forEach((hex, index) => {
         const thisPressure = inputPressure.get(hex.x, hex.y);
-        let downwindDirection: Direction = null;
-        let downwindPressure = Infinity;
+        let lowestNeighborPressure = Infinity;
+        let highestNeighborPressure = -Infinity;
+        let lowerAngles: Direction[] = [];
         for (const dir of directionIndexOrder) {
           const neighbor = this.world.getHexNeighbor(hex.x, hex.y, dir);
           if (neighbor === null) continue;
           const neighborPressure = inputPressure.get(neighbor.x, neighbor.y);
-          if (neighborPressure < thisPressure && neighborPressure < downwindPressure) {
-            downwindPressure = neighborPressure;
-            downwindDirection = dir;
+          if (neighborPressure < thisPressure) {
+            lowerAngles.push(directionAngle[dir]);
+          }
+          if (neighborPressure < lowestNeighborPressure) {
+            lowestNeighborPressure = neighborPressure;
+          }
+          if (neighborPressure > highestNeighborPressure) {
+            highestNeighborPressure = neighborPressure;
           }
         }
-        let windSpeed = 0;
-        if (downwindDirection !== null) {
-          outputDirection.set(hex.x, hex.y, downwindDirection);
-          // wind speed is directly proportional to the difference in pressure
-          windSpeed = (thisPressure - downwindPressure) * 5;
-        }
+        // average angle of all lower neighbors is the initial wind angle
+        let windAngle = meanAngle(lowerAngles);
+        // wind speed is directly proportional to the difference in pressure
+        let windSpeed = Math.abs(highestNeighborPressure - lowestNeighborPressure) * 3;
         outputSpeed.set(hex.x, hex.y, windSpeed);
 
-        // High wind speed areas are more likely to go in the downwind direction
-        // low wind speed areas are more likely to go with the wind patterns
-
-        // where 0 latitude = itczLatitude
         const { lat } = this.world.getHexCoordinate(hex);
-        /**
-         * TRADE WINDS
-         * from 0 to 30 degrees latitude: (1 at 0 and 0 at 30)
-         *      at 1 = 100% west influence
-         *      at 0 = 0% west influence
-         */
+        const ratio = clamp(windSpeed / 10, 0, 1);
+
+        // low wind speed = more randomness
+        windAngle += (this.rng() * (1 - ratio) * 30) - 15;
+
+        // low pressure gradients = more likely to be influenced by coriolis
+
+        // NORTH:
+        // clockwise around high pressure
+        // counter-clockwise around low pressure
+
+        // SOUTH:
+        // counter-clockwise around high pressure
+        // clockwise around low pressure
+        
+        if (lat > 0) {
+          if (thisPressure > AVG_PRESSURE) {
+            windAngle += (ratio * 45);
+          } else {
+            windAngle -= (ratio * 45);
+          }
+        } else {
+          if (thisPressure > AVG_PRESSURE) {
+            windAngle -= (ratio * 45);
+          } else {
+            windAngle += (ratio * 45);
+          }
+        }
+
+        // prevailing winds
         const BELT_ITCZ = itczLatitude.get(hex.x);
         const BELT_STHZ_NORTH = BELT_ITCZ + (90 - BELT_ITCZ) / 3; // 1/3 from the ITCZ
         const BELT_STHZ_SOUTH = BELT_ITCZ + (BELT_ITCZ - 90) / 3; // 1/3 from the ITCZ
         const BELT_PF_NORTH = BELT_STHZ_NORTH + ((90 - BELT_STHZ_NORTH) / 2); // between STHZ and poles
         const BELT_PF_SOUTH = BELT_STHZ_SOUTH - ((BELT_STHZ_SOUTH + 90) / 2); // between STHZ and poles
-        const windSpeedRatio = 1 - clamp(windSpeed / 10, 0, 1); // 1 at 0 m/s 1 at 10 m/s
+
+        let prevailingWindAngle: number;
+        // TRADE WINDS
         if (inRange(lat, BELT_ITCZ, BELT_STHZ_NORTH)) {
-          // northern trade winds
           const latitudeComponent = getLatitudeGradientLinear(lat, BELT_ITCZ, BELT_STHZ_NORTH);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          // from 1 to 0.5 = SW
-          // from 0.5 to 0 = S
-          let dominantDirection: Direction;
-          if (latitudeComponent >= 0.5) {
-            dominantDirection = Direction.SW;
-          } else if (latitudeComponent < 0.5) {
-            dominantDirection = Direction.S;
-          }
-          if (this.rng() < windSpeedRatio) {
-            outputDirection.set(hex.x, hex.y, dominantDirection);
-          }
-        } else if (inRange(lat, BELT_STHZ_SOUTH, BELT_ITCZ)) {
-          // southern trade winds
-          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_ITCZ, BELT_STHZ_SOUTH);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          // from 1 to 0.5 = NW
-          // from 0.5 to 0 = N
-          let dominantDirection: Direction;
-          if (latitudeComponent >= 0.5) {
-            dominantDirection = Direction.NW;
-          } else if (latitudeComponent < 0.5) {
-            dominantDirection = Direction.N;
-          }
-          if (this.rng() < windSpeedRatio) {
-            outputDirection.set(hex.x, hex.y, dominantDirection);
-          }
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 180], [weight, 1 - weight]);
+        }
+        else if (inRange(lat, BELT_STHZ_SOUTH, BELT_ITCZ)) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_STHZ_SOUTH, BELT_ITCZ);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 360], [weight, 1 - weight])
         }
 
-        /**
-         * WESTERLIES
-         * from 30 to 60 degrees latitude: (1 at 60 and 0 at 30)
-         *      at 1 = 100% east influence
-         *      at 0 = 0% east influence
-         */
+        // WESTERLIES
         if (inRange(lat, BELT_STHZ_NORTH, BELT_PF_NORTH)) {
-          // northern westerlies
-          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_NORTH, BELT_STHZ_NORTH);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          if (this.rng() < latitudeComponent) {
-            outputDirection.set(hex.x, hex.y, Direction.SE);
-          }
-        } else if (inRange(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH)) {
-          // southern westerlies
+          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_STHZ_NORTH, BELT_PF_NORTH);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([90, 0], [weight, 1 - weight]);
+        }
+        else if (inRange(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH)) {
           const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_SOUTH, BELT_STHZ_SOUTH);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          if (this.rng() < latitudeComponent) {
-            outputDirection.set(hex.x, hex.y, Direction.NE);
-          }
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([90, 180], [weight, 1 - weight])
         }
 
-        /**
-         * POLAR EASTERLIES
-         * from 60 to 90 degrees latitude: (1 at 60 and 0 at 90)
-         *      at 1 = 100% west influence
-         *      at 0 = 0% west influence
-         */
+        // // POLAR EASTERLIES
         if (lat >= BELT_PF_NORTH) {
-          // northern polar easterlies
           const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_NORTH, 90);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          if (this.rng() < latitudeComponent) {
-            outputDirection.set(hex.x, hex.y, Direction.NW);
-          }
-        } else if (lat < BELT_PF_SOUTH){
-          // southern polar easteries
-          const latitudeComponent = getLatitudeGradientLinear(lat, BELT_PF_SOUTH, 90);
-          // outputSpeed.set(hex.x, hex.y, latitudeComponent);
-          if (this.rng() < latitudeComponent) {
-            outputDirection.set(hex.x, hex.y, Direction.SW);
-          }
+          const weight = latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 180], [weight, 1 - weight]);
+        } else if (lat < BELT_PF_SOUTH) {
+          const latitudeComponent = getLatitudeGradientLinear(lat, 90, BELT_PF_SOUTH);
+          const weight = 1 - latitudeComponent;
+          prevailingWindAngle = meanAngleWeighted([270, 0], [weight, 1 - weight])
         }
-        
+
+        // windAngle = prevailingWindAngle;
+
+        // low speed = more likely to be influenced by trade winds
+        windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [ratio, 1 - ratio]);
+
+        // or maybbe use pressure diff?
+        // const pressureDiff = thisPressure - AVG_PRESSURE;
+        // if (pressureDiff > 0) { // high pressure
+        //   const pressureDiffRatio = clamp(pressureDiff / 10, 0, 1); // 1 at clost to mean, 0 at extremes
+        //   windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [pressureDiffRatio, 1 - pressureDiffRatio]);
+        // } else {
+        //   const pressureDiffRatio = clamp(pressureDiff / -10, 0, 1); // 1 at clost to mean, 0 at extremes
+        //   windAngle = meanAngleWeighted([windAngle, prevailingWindAngle], [pressureDiffRatio, 1 - pressureDiffRatio]);
+        // }
+
+        // windAngle = meanAngle([windAngle, prevailingWindAngle]);
+
+        outputDirection.set(hex.x, hex.y, windAngle % 360);
       });
     };
     decideSeasonWind(pressureJanuary, windJanuaryDirection, windJanuarySpeed);
@@ -668,6 +698,91 @@ export class WorldGenerator {
     console.log('wind january', windJanuaryDirection, windJanuarySpeed);
     console.log('wind july', windJulyDirection, windJulySpeed);
 
+    windTimer.stopTimer();
+
+    // OCEAN CURRENTS
+
+    /**
+     * Water flows from one hex to another, affected by wind, Coriolis effect, landmasses.
+     * Warm currents come from the equator and move poleward, cold currents come from the poles and move to the equator (these are only relative terms)
+     * Water speed is higher for currents originating near the equator (over 1 knots). At the equator, currents move eastward.
+     */
+    const oceanCurrentJanuaryDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * width * height))
+    const oceanCurrentJanuaryDirection = ndarray(oceanCurrentJanuaryDirectionData, [width, height]);
+    const oceanCurrentJanuarySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const oceanCurrentJanuarySpeed = ndarray(oceanCurrentJanuarySpeedData, [width, height]);
+
+    const oceanCurrentJulyDirectionData = new Int16Array(new ArrayBuffer(Int16Array.BYTES_PER_ELEMENT * width * height))
+    const oceanCurrentJulyDirection = ndarray(oceanCurrentJulyDirectionData, [width, height]);
+    const oceanCurrentJulySpeedData = new Float32Array(new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * width * height))
+    const oceanCurrentJulySpeed = ndarray(oceanCurrentJulySpeedData, [width, height]);
+
+    const oceanCurrentTimer = new DebugTimer('ocean currents');
+
+
+    /**
+     * a map of hexes to a list of tuples describing what direction is the current going and what percent should go there
+     * e.g.:
+     * windAngle = 0  -> [N, 1.0]
+     * windAngle = 30 -> [N, 0.50], [NE, 0.50] 
+     * windAngle = 15 -> [N, 0.75], [NE, 0.25]
+     */
+    let hexDownwindMap = new Map<Hex, [dir: Direction, percent: number][]>();
+
+    // calculate hexDownwindMap
+    const calculateSeason = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
+      this.world.hexgrid.forEach((hex, index) => {
+        if (this.world.getHexHeight(hex) >= sealevel) return;
+        const windAngle = inputWindDirection.get(hex.x, hex.y);
+        // find nearest two directions to windAngle
+        const sortedDirectionAngles = directionIndexOrder
+          .map(dir => [dir, windAngle - directionAngle[dir]])
+          .sort((a, b) => a[1] - b[1]) as [dir: Direction, diff: number][];
+        
+        const [firstDirection, secondDirection] = sortedDirectionAngles;
+        
+        const currentDirection = windAngle;
+        /**
+         * TODO: implement
+         * if any of the hexes windAngle is pointing to are land hexes, move the windAngle such that
+         * it points towards the poles away from land, then recalculate direction
+         * 
+         * speed should be proportional to the amount of deflection
+         * e.g. if the only ocean neighbor is 180 degrees from the windAngle, then the speed should be very low
+         */
+
+        // set initial speed
+        outputSpeed.set(hex.x, hex.y, 0.1);
+
+        // set direction
+        outputDirection.set(hex.x, hex.y, currentDirection);
+      });
+    }
+    // iterate over hexDownwindMap and create current, setting outputSpeed
+    const step = (inputWindDirection: ndarray, inputWindSpeed: ndarray, outputDirection: ndarray, outputSpeed: ndarray) => {
+      // this.world.hexgrid.forEach((hex, index) => {
+      //   if (this.world.getHexHeight(hex) >= sealevel) return;
+      //   const downwindHexes = hexDownwindMap.get(hex);
+      // });
+    };
+    const MAX_OCEAN_CURRENT_SIM_TICKS = 50;
+
+    calculateSeason(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
+    for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
+      step(windJanuaryDirection, windJanuarySpeed, oceanCurrentJanuaryDirection, oceanCurrentJanuarySpeed);
+    }
+
+    calculateSeason(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
+    for (let t = 0; t < MAX_OCEAN_CURRENT_SIM_TICKS; t++) {
+      step(windJulyDirection, windJulySpeed, oceanCurrentJulyDirection, oceanCurrentJulySpeed);
+    }
+
+
+    console.log('ocean current january', ndarrayStats(oceanCurrentJanuaryDirection), ndarrayStats(oceanCurrentJanuarySpeed));
+    console.log('ocean current july', ndarrayStats(oceanCurrentJulyDirection), ndarrayStats(oceanCurrentJulySpeed));
+
+    oceanCurrentTimer.stopTimer();
+
     this.world.setWorldClimate(
       pressureJanuaryData,
       pressureJulyData,
@@ -675,6 +790,10 @@ export class WorldGenerator {
       windJanuarySpeedData,
       windJulyDirectionData,
       windJulySpeedData,
+      oceanCurrentJanuaryDirectionData,
+      oceanCurrentJanuarySpeedData,
+      oceanCurrentJulyDirectionData,
+      oceanCurrentJulySpeedData,
     );
 
     return {
@@ -684,6 +803,10 @@ export class WorldGenerator {
       windJanuarySpeed: windJanuarySpeedData,
       windJulyDirection: windJulyDirectionData,
       windJulySpeed: windJulySpeedData,
+      oceanCurrentJanuaryDirection: oceanCurrentJanuaryDirectionData,
+      oceanCurrentJanuarySpeed: oceanCurrentJanuarySpeedData,
+      oceanCurrentJulyDirection: oceanCurrentJulyDirectionData,
+      oceanCurrentJulySpeed: oceanCurrentJulySpeedData,
     };
   }
 

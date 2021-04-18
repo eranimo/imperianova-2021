@@ -172,11 +172,14 @@ export class WorldMap {
         for (let index = 0; index < this.manager.hexLength; index++) {
           const hex = this.manager.getHex(index);
           const dir = mapMode.setArrowDir(index, this.manager);
-          const arrowSprite = new Sprite(this.assets.hexTemplate.getTile(6 + dir));
-          arrowSprite.tint = 0xFFFFFF;
-          arrowSprite.position.set(hex.posX, hex.posY);
+          if (dir === null) continue;
+          const arrowSprite = new Sprite(this.assets.arrowTexture);
+          arrowSprite.angle = dir;
+          arrowSprite.tint = 0x333;
           arrowSprite.width = this.assets.hexMask.width;
           arrowSprite.height = this.assets.hexMask.height;
+          arrowSprite.position.set(hex.posX + (arrowSprite.width / 2), hex.posY + (arrowSprite.height / 2));
+          arrowSprite.anchor.set(0.5);
           this.arrowLayer.addChild(arrowSprite);
         }
       }
