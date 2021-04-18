@@ -2,7 +2,8 @@ import { Game } from './Game';
 import { World, Hex, Landmass } from '../world/World';
 import Alea from 'alea';
 import { createTile, createPop } from './entities';
-import { PopDataComponent, WorldTileDataComponent, PopTypes } from './components';
+import { PopDataComponent, WorldTileDataComponent } from './components';
+import { PopTypes } from './PopData';
 import { Random } from '../../utils/Random';
 import { LandType } from '../world/terrain';
 import { TerrainType, terrainTypeTitles } from './../world/terrain';
@@ -47,5 +48,5 @@ export function setupGame(
       game: game,
     });
     tileEntity.getComponent(WorldTileDataComponent).value.pops.add(popEntity);
-  })
+  });
 }

@@ -1,13 +1,15 @@
 import { System } from '../entity-system';
 import { Query, EntityManager } from '../entity-system/EntityManager';
 import { Game } from './Game';
-import { PopDataComponent, HexPositionComponent, WorldTileDataComponent, MonthlyPopGrowthRate, CarryingCapacityMap } from './components';
+import { PopDataComponent, HexPositionComponent, WorldTileDataComponent } from './components';
+import { MonthlyPopGrowthRate, CarryingCapacityMap } from './PopData';
 
 export class PopSystem extends System {
   query: Query;
 
   init(manager: EntityManager) {
     this.query = manager.createQuery(entity => entity.hasComponent(PopDataComponent));
+    this.frequency = 30;
   }
 
   update() {
