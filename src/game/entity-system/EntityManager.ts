@@ -4,7 +4,7 @@ import { MultiMap } from '../../utils/MultiMap';
 import { MapSet } from '../../utils/MapSet';
 import { get, isFunction, set } from 'lodash';
 import { number, strict } from 'yargs';
-import { EntityRef, EntityObject, Value, IField } from './fields';
+import { EntityRef, EntityObject, Value, IField, EntitySet } from './fields';
 import { Signal } from 'typed-signals';
 import { autorun, configure, makeAutoObservable, makeObservable, observable, runInAction } from 'mobx';
 import { Game, Context } from '../simulation/Game';
@@ -171,6 +171,8 @@ export class EntityManager {
     configure({
       enforceActions: 'never',
     });
+
+    (global as any).entityManager = this;
   }
 
   /**
@@ -203,7 +205,7 @@ export class EntityManager {
         throw Error(`Could not find component with type "${type}"`)
       }
       const component = this.componentTypeMap.get(type);
-      this.components.set(component, components.map(compExport => {
+      for (const compExport of components) {
         const data = {};
         for (const [key, value] of Object.entries(compExport.values)) {
           if (value && value.__type) {
@@ -211,20 +213,30 @@ export class EntityManager {
               data[key] = new Value<any>(value.value);
             } else if (value.__type === 'EntityRef') {
               if (!entities.has(value.value)) {
-                throw Error(`Could not find entity with ID "${value.value}"`);
+                throw new Error(`Could not find entity with ID "${value.value}"`);
               }
               const entity = entities.get(value.value);
               data[key] = new EntityRef(entity);
+            } else if (value.__type === 'EntitySet') {
+              const entitySet = new EntitySet();
+              for (const entityID of value.value as string[]) {
+                const entity = entities.get(entityID);
+                if (!entity) {
+                  throw new Error(`Could not find entity with ID "${entityID}"`);
+                }
+                entitySet.add(entity);
+              }
+              data[key] = entitySet;
             }
           } else {
             data[key] = value;
           }
         }
-        const cv = new ComponentValue(data, component);
-        cv.attach(entities.get(compExport.entityID));
-        return cv;
-      }));
+        const entity = entities.get(compExport.entityID)
+        entity.addComponent(component, data);
+      }
     }
+
     this.updateStats();
   }
 
@@ -366,9 +378,9 @@ export class EntityManager {
       if (!entity) {
         return;
       }
-      entity.added = false;
-      this.entityById.delete(entity.id);
       if (entity.removed) {
+        entity.added = false;
+        this.entityById.delete(entity.id);
         this.components.forEach((componentValues) => {
           componentValues[entity.index] = undefined;
         });

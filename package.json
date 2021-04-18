@@ -98,6 +98,7 @@
     "stats.js": "^0.17.0",
     "structurae": "^3.3.0",
     "threads": "^1.6.3",
+    "ts-markov": "^1.0.0",
     "ts-toolbelt": "^9.6.0",
     "typed-signals": "^2.2.0",
     "typescript-collections": "^1.3.3",

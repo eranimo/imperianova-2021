@@ -22,8 +22,11 @@ export class GameMap {
   hexFieldUpdates: Subject<FieldUpdate<any, any>> = new Subject();
 
   constructor(public game: Game) {
+  }
+  
+  init() {
+    const game = this.game;
     // create world map state
-    console.log('Game', game);
     const hexes: WorldMapStateHex[] = [];
     for (const hex of game.world.hexgrid) {
       const river = {
@@ -95,7 +98,6 @@ export class GameMap {
     this.worldMapState = worldMapState;
     this.hexes = worldMapState.get('hexes');
     this.hexesView = worldMapState.getView('hexes') as ArrayView;
-    console.log('hexes', this.hexesView);
   }
 
   setHexState<K extends keyof WorldMapStateHex>(index: number, field: K, value: WorldMapStateHex[K]) {

@@ -12,6 +12,7 @@ import { setupGame } from './setupGame';
 import { MapModeType } from '../../WorldViewer/mapMode';
 import { AnyView, View } from 'structurae';
 import { GameMap } from "./GameMap";
+import { NameGenerator } from './nameGenerator';
 
 
 export type GameData = {
@@ -29,6 +30,7 @@ export type Context = {
   gameMap: GameMap,
   world: World,
   worldGrid: WorldGrid,
+  nameGenerator: NameGenerator,
 };
 
 const defaultMapmode = localStorage.mapMode
@@ -65,6 +67,7 @@ export class Game {
       game: this,
       gameMap: this.gameMap,
       world,
+      nameGenerator: new NameGenerator(),
       worldGrid: new WorldGrid(world),
     };
     entityManager.context = this.context;
@@ -77,6 +80,8 @@ export class Game {
       date: currentDate,
     });
     this.entityManager = entityManager;
+
+    (window as any).game = this;
   }
 
   get isPlaying() {
@@ -87,9 +92,8 @@ export class Game {
     const worldGen = new WorldGenerator();
     const world = worldGen.generate(options.world);
     const game = new Game(world);
-    // run one tick when beginning the game
-    // game.entityManager.update();
     setupGame(game);
+    game.gameMap.init();
     game.gameMap.renderWorld();
     return game;
   }
@@ -99,6 +103,8 @@ export class Game {
     const game = new Game(world);
     game.saveID = saveID;
     game.entityManager.import(data.entityData);
+    game.gameMap.init();
+    game.gameMap.renderWorld();
     return game;
   }
 

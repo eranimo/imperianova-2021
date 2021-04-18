@@ -18,3 +18,8 @@ declare module "raw-loader!*" {
   const value: any;
   export default value;
 }
+
+declare module "*.txt" {
+  const value: string;
+  export default value;
+}

@@ -1,11 +1,12 @@
 import { Component } from '../entity-system';
 import { Direction, Coordinate } from '../../types';
-import { EntitySet } from '../entity-system/fields';
+import { EntitySet, EntityRef } from '../entity-system/fields';
 
 
 // Core components
 export type GameInfo = {
   date: number,
+  player?: EntityRef,
 };
 export const GameInfoComponent = new Component<GameInfo>('GameInfo');
 export const WorldPositionComponent = new Component<Coordinate>('WorldPosition');
@@ -19,6 +20,19 @@ export type WorldTileData = {
 }
 export const WorldTileDataComponent = new Component<WorldTileData>('TileData');
 
+// Polities
+export type PolityData = {
+  name: string,
+  mapColor: number,
+  tiles: EntitySet, // Tile entities this polity owns
+};
+export const PolityDataComponent = new Component<PolityData>('PolityData');
+
+// component on tiles with reference to polity that owns it
+export type PolityTile = {
+  polity: EntityRef,
+};
+export const PolityTileComponent = new Component<PolityTile>('PolityTile');
 
 // Resouerces
 
@@ -40,6 +54,7 @@ export type PopData = {
 export const PopDataComponent = new Component<PopData>('PopData');
 
 
+// add components here to register them
 export const components = [
   GameInfoComponent,
   WorldPositionComponent,
@@ -47,4 +62,6 @@ export const components = [
   WorldTileDataComponent,
   ResourceDataComponent,
   PopDataComponent,
+  PolityDataComponent,
+  PolityTileComponent,
 ]

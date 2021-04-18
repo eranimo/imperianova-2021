@@ -1,15 +1,24 @@
 import { Game } from './Game';
 import { World, Hex } from '../world/World';
 import Alea from 'alea';
-import { createTile, createPop } from './entities';
+import { createTile, createPop, createPolity } from './entities';
 import { PopDataComponent, WorldTileDataComponent } from './components';
 import { Random } from '../../utils/Random';
+import { times } from 'lodash';
 
 export function setupGame(
   game: Game,
 ) {
   console.log('setup game');
   const random = new Random('123'); // TODO: game seed option
+
+  for (let i = 0; i < 1; i++) {
+    const name = game.context.nameGenerator.generateName();
+    const polity = createPolity(game.entityManager, {
+      name,
+    });
+  }
+
   /**
    * create initial pops
    */
