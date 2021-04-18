@@ -108,6 +108,7 @@ export class World {
     );
     world.setWorldRainfall(worldData.rainfall);
     world.setWorldRivers(worldData.rivers);
+    world.generateEcology();
     return world;
   }
 
