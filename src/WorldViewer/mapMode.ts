@@ -294,6 +294,24 @@ class WindMapMode implements MapMode {
   }
 }
 
+export enum MapModeType {
+  Terrain,
+  DistanceToCoast,
+  PressureJanuary,
+  PressureJuly,
+  TempJanuary,
+  TempJuly,
+  FluxJanuary,
+  FluxJuly,
+  WindJanuary,
+  WindJuly,
+  Height,
+  Rainfall,
+  Population,
+  NPP,
+  HunterCapacity
+}
+
 class TempMapMode implements MapMode {
   mapSettings = {
     displayRivers: false,
@@ -435,24 +453,6 @@ class HunterCapacityMapMode implements MapMode {
       Math.round(color[2] * 255),
     ]);
   }
-}
-
-export enum MapModeType {
-  Terrain,
-  DistanceToCoast,
-  PressureJanuary,
-  PressureJuly,
-  TempJanuary,
-  TempJuly,
-  FluxJanuary,
-  FluxJuly,
-  WindJanuary,
-  WindJuly,
-  Height,
-  Rainfall,
-  Population,
-  NPP,
-  HunterCapacity
 }
 
 export const mapModes: Map<MapModeType, MapMode> = new Map([
